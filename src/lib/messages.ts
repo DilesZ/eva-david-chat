@@ -139,5 +139,5 @@ export async function partnerPresence(partnerId: number) {
   }
 }
 
-// Emojis permitidos para reaccionar (conjunto corto y común)
-export const REACTION_EMOJIS = ['❤️', '😂', '😮', '😢', '👍', '🙏'] as const
+// Emojis permitidos para reaccionar (conjunto corto y común, sin VS16)
+export const REACTION_EMOJIS = ['❤', '😂', '😮', '😢', '👍', '🙏'] as const

@@ -21,7 +21,9 @@ export async function POST(
   }
 
   const body = await req.json().catch(() => null)
-  const emoji = typeof body?.emoji === 'string' ? body.emoji : ''
+  // Normaliza el emoji (quita el selector de variación VS16: ❤️ y ❤ son el mismo)
+  const raw = typeof body?.emoji === 'string' ? body.emoji : ''
+  const emoji = raw.replace(/\uFE0F/g, '');
   if (!(REACTION_EMOJIS as readonly string[]).includes(emoji)) {
     return NextResponse.json({ error: 'Emoji no permitido' }, { status: 400 })
   }
