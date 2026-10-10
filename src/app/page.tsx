@@ -19,7 +19,10 @@ import {
   Images,
   X,
   Film,
+  Plus,
+  Mic,
 } from 'lucide-react'
+import { useIsMobile } from '@/hooks/use-mobile'
 import { useToast } from '@/hooks/use-toast'
 import type { ChatMessage, Partner, SessionUser } from '@/components/chat/types'
 import {
@@ -39,7 +42,7 @@ import { Lightbox } from '@/components/chat/lightbox'
 import { FullEmojiPicker } from '@/components/chat/full-emoji-picker'
 import { PhotoDialog } from '@/components/chat/photo-dialog'
 import { GalleryDialog } from '@/components/chat/gallery-dialog'
-import { AudioRecorder } from '@/components/chat/audio-recorder'
+import { AudioRecorder, type AudioRecorderHandle } from '@/components/chat/audio-recorder'
 import { GifPicker } from '@/components/chat/gif-picker'
 import { SettingsDialog } from '@/components/chat/settings-dialog'
 import { ForgotPassword } from '@/components/chat/forgot-password'
@@ -105,7 +108,10 @@ export default function HomePage() {
   const [highlightId, setHighlightId] = useState<number | null>(null)
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null)
   const [gifOpen, setGifOpen] = useState(false)
+  const [attachOpen, setAttachOpen] = useState(false)
   const [avatars, setAvatars] = useState<Record<string, string | null>>({})
+  const isMobile = useIsMobile()
+  const audioRef = useRef<AudioRecorderHandle | null>(null)
 
   const socketRef = useRef<Socket | null>(null)
   const bottomRef = useRef<HTMLDivElement | null>(null)
@@ -138,6 +144,7 @@ export default function HomePage() {
     setPhotoDataUrl(null)
     setReplyTo(null)
     setGifOpen(false)
+    setAttachOpen(false)
     setSearchOpen(false)
     setSearchResults([])
     document.title = BASE_TITLE
@@ -1096,7 +1103,11 @@ export default function HomePage() {
                 Respondiendo a {replyTo.name}
               </p>
               <p className="text-[12px] text-stone-500 truncate">
-                {replyTo.type === 'image' ? '📷 Foto' : replyTo.content}
+                {replyTo.type === 'image'
+                  ? '📷 Foto'
+                  : replyTo.type === 'audio'
+                    ? '🎙️ Audio'
+                    : replyTo.content}
               </p>
             </div>
             <button
@@ -1109,7 +1120,12 @@ export default function HomePage() {
             </button>
           </div>
         )}
-        <form onSubmit={handleSend} className="max-w-2xl mx-auto flex items-end gap-2 relative">
+        {isMobile && (
+          <div className="max-w-2xl mx-auto mb-2">
+            <AudioRecorder ref={audioRef} hideIdle onSend={handleSendAudio} sending={uploading} />
+          </div>
+        )}
+        <form onSubmit={handleSend} className="max-w-2xl mx-auto flex items-end gap-1.5 sm:gap-2 relative">
           <input
             ref={photoInputRef}
             type="file"
@@ -1117,6 +1133,74 @@ export default function HomePage() {
             className="hidden"
             onChange={(e) => handlePhotoFile(e.target.files?.[0])}
           />
+
+          {isMobile ? (
+            <div className="relative shrink-0">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => setAttachOpen((v) => !v)}
+                aria-label="Adjuntar foto, GIF o audio"
+                title="Adjuntar"
+                className={`w-11 h-11 rounded-full ${
+                  attachOpen ? 'text-rose-500 bg-rose-50' : 'text-stone-400 hover:text-rose-500 hover:bg-rose-50'
+                }`}
+              >
+                <Plus className="w-5 h-5" />
+              </Button>
+              {attachOpen && (
+                <>
+                  <button
+                    type="button"
+                    aria-label="Cerrar menú"
+                    onClick={() => setAttachOpen(false)}
+                    className="fixed inset-0 z-20 cursor-default bg-transparent"
+                  />
+                  <div className="absolute bottom-full left-0 mb-2 z-30 w-44 bg-white border border-rose-100 rounded-2xl shadow-xl p-1.5 space-y-0.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAttachOpen(false)
+                        photoInputRef.current?.click()
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-rose-50 text-sm text-stone-700"
+                    >
+                      <ImagePlus className="w-5 h-5 text-rose-500" /> Foto
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAttachOpen(false)
+                        setGifOpen(true)
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-rose-50 text-sm text-stone-700"
+                    >
+                      <Film className="w-5 h-5 text-rose-500" /> GIF
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAttachOpen(false)
+                        audioRef.current?.start()
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-rose-50 text-sm text-stone-700"
+                    >
+                      <Mic className="w-5 h-5 text-rose-500" /> Audio
+                    </button>
+                  </div>
+                </>
+              )}
+              <GifPicker
+                open={gifOpen}
+                onClose={() => setGifOpen(false)}
+                onPick={(dataUrl) => {
+                  setGifOpen(false)
+                  setPhotoDataUrl(dataUrl)
+                }}
+              />
+            </div>
+          ) : null}
 
           <div className="relative shrink-0">
             <Button
@@ -1160,49 +1244,53 @@ export default function HomePage() {
             className="flex-1 min-h-11 max-h-32 resize-none rounded-3xl border-rose-200 focus-visible:ring-rose-300 bg-white py-2.5"
           />
 
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            onClick={() => photoInputRef.current?.click()}
-            disabled={processingPhoto || uploading}
-            aria-label="Enviar foto"
-            title="Enviar foto"
-            className="w-11 h-11 rounded-full text-stone-400 hover:text-rose-500 hover:bg-rose-50 shrink-0"
-          >
-            {processingPhoto ? (
-              <Loader2 className="w-5 h-5 animate-spin" />
-            ) : (
-              <ImagePlus className="w-5 h-5" />
-            )}
-          </Button>
-
-          <div className="relative shrink-0">
+          {!isMobile && (
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              onClick={() => setGifOpen((v) => !v)}
-              disabled={uploading}
-              aria-label="Enviar GIF"
-              title="Enviar GIF"
-              className={`w-11 h-11 rounded-full ${
-                gifOpen ? 'text-rose-500 bg-rose-50' : 'text-stone-400 hover:text-rose-500 hover:bg-rose-50'
-              }`}
+              onClick={() => photoInputRef.current?.click()}
+              disabled={processingPhoto || uploading}
+              aria-label="Enviar foto"
+              title="Enviar foto"
+              className="w-11 h-11 rounded-full text-stone-400 hover:text-rose-500 hover:bg-rose-50 shrink-0"
             >
-              <Film className="w-5 h-5" />
+              {processingPhoto ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <ImagePlus className="w-5 h-5" />
+              )}
             </Button>
-            <GifPicker
-              open={gifOpen}
-              onClose={() => setGifOpen(false)}
-              onPick={(dataUrl) => {
-                setGifOpen(false)
-                setPhotoDataUrl(dataUrl)
-              }}
-            />
-          </div>
+          )}
 
-          <AudioRecorder onSend={handleSendAudio} sending={uploading} />
+          {!isMobile && (
+            <div className="relative shrink-0">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => setGifOpen((v) => !v)}
+                disabled={uploading}
+                aria-label="Enviar GIF"
+                title="Enviar GIF"
+                className={`w-11 h-11 rounded-full ${
+                  gifOpen ? 'text-rose-500 bg-rose-50' : 'text-stone-400 hover:text-rose-500 hover:bg-rose-50'
+                }`}
+              >
+                <Film className="w-5 h-5" />
+              </Button>
+              <GifPicker
+                open={gifOpen}
+                onClose={() => setGifOpen(false)}
+                onPick={(dataUrl) => {
+                  setGifOpen(false)
+                  setPhotoDataUrl(dataUrl)
+                }}
+              />
+            </div>
+          )}
+
+          {!isMobile && <AudioRecorder onSend={handleSendAudio} sending={uploading} />}
 
           <Button
             type="submit"

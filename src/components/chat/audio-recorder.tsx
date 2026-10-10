@@ -2,9 +2,13 @@
 
 // Grabadora de notas de voz: grabar → previsualizar → enviar o descartar.
 // Usa MediaRecorder del navegador (webm donde se pueda, mp4 en Safari).
-import { useEffect, useRef, useState } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { Mic, Square, Send, Trash2, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+
+export type AudioRecorderHandle = {
+  start: () => void
+}
 
 function pickMime(): string {
   if (typeof MediaRecorder === 'undefined') return ''
@@ -22,13 +26,14 @@ function formatTimer(sec: number): string {
 
 const MAX_SECONDS = 120
 
-export function AudioRecorder({
-  onSend,
-  sending,
-}: {
-  onSend: (dataUrl: string) => void
-  sending: boolean
-}) {
+export const AudioRecorder = forwardRef<
+  AudioRecorderHandle,
+  {
+    onSend: (dataUrl: string) => void
+    sending: boolean
+    hideIdle?: boolean
+  }
+>(function AudioRecorder({ onSend, sending, hideIdle }, ref) {
   const [phase, setPhase] = useState<'idle' | 'recording' | 'preview'>('idle')
   const [seconds, setSeconds] = useState(0)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
@@ -38,6 +43,12 @@ export function AudioRecorder({
   const streamRef = useRef<MediaStream | null>(null)
   const timerRef = useRef<number | null>(null)
   const mimeRef = useRef('')
+  const phaseRef = useRef<'idle' | 'recording' | 'preview'>('idle')
+
+  function setPhaseAndRef(p: 'idle' | 'recording' | 'preview') {
+    phaseRef.current = p
+    setPhase(p)
+  }
 
   function stopTracks() {
     streamRef.current?.getTracks().forEach((t) => t.stop())
@@ -60,6 +71,12 @@ export function AudioRecorder({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  useImperativeHandle(ref, () => ({
+    start: () => {
+      if (phaseRef.current === 'idle') startRecording()
+    },
+  }))
+
   async function startRecording() {
     setError('')
     const mime = pickMime()
@@ -81,12 +98,12 @@ export function AudioRecorder({
         const blob = new Blob(chunksRef.current, { type: mime.split(';')[0] })
         const url = URL.createObjectURL(blob)
         setPreviewUrl(url)
-        setPhase('preview')
+        setPhaseAndRef('preview')
         stopTracks()
       }
       rec.start()
       setSeconds(0)
-      setPhase('recording')
+      setPhaseAndRef('recording')
       timerRef.current = window.setInterval(() => {
         setSeconds((s) => {
           if (s + 1 >= MAX_SECONDS) {
@@ -108,7 +125,7 @@ export function AudioRecorder({
       rec.stop()
     } else {
       stopTracks()
-      setPhase('idle')
+      setPhaseAndRef('idle')
     }
   }
 
@@ -117,7 +134,7 @@ export function AudioRecorder({
     stopTracks()
     if (previewUrl) URL.revokeObjectURL(previewUrl)
     setPreviewUrl(null)
-    setPhase('idle')
+    setPhaseAndRef('idle')
     setSeconds(0)
   }
 
@@ -195,6 +212,14 @@ export function AudioRecorder({
     )
   }
 
+  if (phase === 'idle' && hideIdle) {
+    return error ? (
+      <span className="text-[11px] text-red-500" role="alert">
+        {error}
+      </span>
+    ) : null
+  }
+
   return (
     <div className="flex items-center gap-1">
       <Button
@@ -215,4 +240,4 @@ export function AudioRecorder({
       )}
     </div>
   )
-}
+})
