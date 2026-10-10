@@ -153,7 +153,24 @@ export async function compressImage(file: File): Promise<string> {
   }
 }
 
-// Foto de perfil: cuadrada de 256px en JPEG (~20-40 KB) para guardar en la BD
+// Sticker SVG del pack propio → PNG 256px para enviarlo como mensaje
+export async function svgStickerToPng(url: string): Promise<string> {
+  const res = await fetch(url)
+  if (!res.ok) throw new Error('No se pudo cargar el sticker')
+  const blob = await res.blob()
+  const bitmap = await createImageBitmap(blob)
+  try {
+    const canvas = document.createElement('canvas')
+    canvas.width = 256
+    canvas.height = 256
+    const ctx = canvas.getContext('2d')
+    if (!ctx) throw new Error('Canvas no disponible')
+    ctx.drawImage(bitmap, 0, 0, 256, 256)
+    return canvas.toDataURL('image/png')
+  } finally {
+    bitmap.close()
+  }
+}
 export async function compressAvatar(file: File): Promise<string> {
   if (!file.type.startsWith('image/')) {
     throw new Error('Elige una imagen (JPG, PNG, WebP o GIF)')

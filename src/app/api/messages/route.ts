@@ -166,6 +166,7 @@ export async function POST(req: Request) {
   const image = typeof body.image === 'string' ? body.image : ''
   const audio = typeof body.audio === 'string' ? body.audio : ''
   const musicId = parseYoutubeId(typeof body.music === 'string' ? body.music : '')
+  const sticker = body.sticker === true
   const replyToId =
     typeof body.replyToId === 'number' && Number.isInteger(body.replyToId) && body.replyToId > 0
       ? body.replyToId
@@ -176,10 +177,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'El mensaje está vacío' }, { status: 400 })
   }
   if ((image ? 1 : 0) + (audio ? 1 : 0) + (musicId ? 1 : 0) > 1) {
-    return NextResponse.json({ error: 'Envía foto, audio o música (solo uno)' }, { status: 400 })
+    return NextResponse.json({ error: 'Envía foto, audio, música o sticker (solo uno)' }, { status: 400 })
   }
   if (musicId && content) {
     return NextResponse.json({ error: 'La música no lleva texto' }, { status: 400 })
+  }
+  if (sticker && (!image || content || audio || musicId)) {
+    return NextResponse.json({ error: 'El sticker se envía solo' }, { status: 400 })
   }
   if (content.length > (image || audio ? MAX_CAPTION_LENGTH : MAX_CONTENT_LENGTH)) {
     return NextResponse.json({ error: 'El mensaje es demasiado largo' }, { status: 400 })
@@ -237,7 +241,7 @@ export async function POST(req: Request) {
     }
   }
 
-  const kind = musicId ? 'music' : audio ? 'audio' : image ? 'image' : 'text'
+  const kind = musicId ? 'music' : audio ? 'audio' : sticker ? 'sticker' : image ? 'image' : 'text'
   const created = await db.message.create({
     data: {
       content: musicId ?? content,
@@ -271,7 +275,9 @@ export async function POST(req: Request) {
           ? '🎙️ Nota de voz'
           : created.type === 'music'
             ? `🎵 ${payload.music?.title ?? 'Música'}`
-            : content.slice(0, 120)
+            : created.type === 'sticker'
+              ? '✨ Sticker'
+              : content.slice(0, 120)
     notifyPartner(partner.id, session.user.name, preview).catch(() => {})
   }
 

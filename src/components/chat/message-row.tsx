@@ -50,6 +50,7 @@ export function MessageRow({
   const hasImage = msg.type === 'image' && !!msg.imageUrl
   const hasAudio = msg.type === 'audio' && !!msg.audioUrl
   const hasMusic = msg.type === 'music' && !!msg.music
+  const hasSticker = msg.type === 'sticker' && !!msg.imageUrl
   const [playingMusic, setPlayingMusic] = useState(false)
   const [editing, setEditing] = useState(false)
   const [editText, setEditText] = useState(msg.content)
@@ -185,15 +186,29 @@ export function MessageRow({
         {!own && (
           <span className={`text-[11px] font-semibold mb-0.5 px-1 ${style.label}`}>{msg.name}</span>
         )}
-        <div
-          onTouchStart={handleTouchStart}
-          onTouchMove={handleTouchMove}
-          onTouchEnd={handleTouchEnd}
-          onContextMenu={(e) => e.preventDefault()}
-          className={`rounded-2xl shadow-sm ${style.bubble} ${
-            hasImage ? 'p-1.5' : 'px-4 py-2.5'
-          } ${own ? 'rounded-br-md' : 'rounded-bl-md'} select-none`}
-        >
+        {hasSticker ? (
+          <img
+            src={msg.imageUrl ?? ''}
+            alt="Sticker"
+            loading="lazy"
+            draggable={false}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            onContextMenu={(e) => e.preventDefault()}
+            onClick={() => onImageClick(msg.imageUrl as string)}
+            className="block w-36 sm:w-44 h-auto object-contain cursor-zoom-in drop-shadow select-none"
+          />
+        ) : (
+          <div
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            onContextMenu={(e) => e.preventDefault()}
+            className={`rounded-2xl shadow-sm ${style.bubble} ${
+              hasImage ? 'p-1.5' : 'px-4 py-2.5'
+            } ${own ? 'rounded-br-md' : 'rounded-bl-md'} select-none`}
+          >
           {msg.replyTo && (
             <button
               type="button"
@@ -211,7 +226,9 @@ export function MessageRow({
                     ? '🎙️ Audio'
                     : msg.replyTo.type === 'music'
                       ? '🎵 Música'
-                      : msg.replyTo.content}
+                      : msg.replyTo.type === 'sticker'
+                        ? '✨ Sticker'
+                        : msg.replyTo.content}
               </span>
             </button>
           )}
@@ -318,7 +335,8 @@ export function MessageRow({
               </p>
             )
           )}
-        </div>
+          </div>
+        )}
 
         {reactions.length > 0 && (
           <div className={`flex flex-wrap items-center gap-1 mt-1 ${own ? 'justify-end' : ''}`}>

@@ -16,13 +16,13 @@ type MessageWithUser = {
 
 export function toPayload(m: MessageWithUser): MessagePayload {
   const mediaUrl =
-    m.type === 'image' || m.type === 'audio' ? `/api/images/${m.id}` : null
+    m.type === 'image' || m.type === 'audio' || m.type === 'sticker' ? `/api/images/${m.id}` : null
   return {
     id: m.id,
     content: m.content,
     type: m.type,
     createdAt: m.createdAt.toISOString(),
-    imageUrl: m.type === 'image' ? mediaUrl : null,
+    imageUrl: m.type === 'image' || m.type === 'sticker' ? mediaUrl : null,
     audioUrl: m.type === 'audio' ? mediaUrl : null,
     readAt: m.readAt ? m.readAt.toISOString() : null,
     editedAt: m.editedAt ? m.editedAt.toISOString() : null,

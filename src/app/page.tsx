@@ -22,6 +22,7 @@ import {
   Plus,
   Mic,
   Music,
+  Sticker as StickerIcon,
 } from 'lucide-react'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { useToast } from '@/hooks/use-toast'
@@ -44,6 +45,7 @@ import { FullEmojiPicker } from '@/components/chat/full-emoji-picker'
 import { PhotoDialog } from '@/components/chat/photo-dialog'
 import { GalleryDialog } from '@/components/chat/gallery-dialog'
 import { MusicDialog } from '@/components/chat/music-dialog'
+import { StickerPicker } from '@/components/chat/sticker-picker'
 import { AudioRecorder, type AudioRecorderHandle } from '@/components/chat/audio-recorder'
 import { GifPicker } from '@/components/chat/gif-picker'
 import { SettingsDialog } from '@/components/chat/settings-dialog'
@@ -112,6 +114,7 @@ export default function HomePage() {
   const [gifOpen, setGifOpen] = useState(false)
   const [attachOpen, setAttachOpen] = useState(false)
   const [musicOpen, setMusicOpen] = useState(false)
+  const [stickerOpen, setStickerOpen] = useState(false)
   const [avatars, setAvatars] = useState<Record<string, string | null>>({})
   const isMobile = useIsMobile()
   const audioRef = useRef<AudioRecorderHandle | null>(null)
@@ -722,6 +725,45 @@ export default function HomePage() {
     }
   }
 
+  // ---- stickers ----
+
+  async function handleSendSticker(pngDataUrl: string) {
+    setStickerOpen(false)
+    try {
+      const res = await fetch('/api/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: '',
+          image: pngDataUrl,
+          sticker: true,
+          ...(replyTo ? { replyToId: replyTo.id } : {}),
+        }),
+      })
+      if (res.status === 401) {
+        toast({ title: 'Tu sesión ha caducado', description: 'Vuelve a iniciar sesión.' })
+        clearSessionState()
+        return
+      }
+      const data = await res.json().catch(() => null)
+      if (!res.ok || !data?.message) {
+        toast({
+          title: 'No se pudo enviar el sticker',
+          description: data?.error ?? 'Inténtalo de nuevo.',
+        })
+        return
+      }
+      if (isValidMessage(data.message)) {
+        setMessages((prev) =>
+          prev.some((m) => m.id === data.message.id) ? prev : [...prev, data.message],
+        )
+      }
+      setReplyTo(null)
+    } catch {
+      toast({ title: 'No se pudo enviar el sticker', description: 'Comprueba tu conexión.' })
+    }
+  }
+
   // ---- fotos ----
 
   async function handlePhotoFile(file: File | null | undefined) {
@@ -922,7 +964,9 @@ export default function HomePage() {
         avatarImg={avatars[msg.username] ?? null}
         onImageClick={setLightboxUrl}
         onEdit={
-          msg.username === me.username && msg.type !== 'music' ? handleEditMessage : undefined
+          msg.username === me.username && (msg.type === 'text' || msg.type === 'image' || msg.type === 'audio')
+            ? handleEditMessage
+            : undefined
         }
         onDelete={msg.username === me.username ? handleDeleteMessage : undefined}
         onReply={(m) => {
@@ -1044,7 +1088,9 @@ export default function HomePage() {
                                   ? '🎙️ Audio'
                                   : r.type === 'music'
                                     ? `🎵 ${r.music?.title ?? 'Música'}`
-                                    : r.content}
+                                    : r.type === 'sticker'
+                                      ? '✨ Sticker'
+                                      : r.content}
                             </span>
                             <span className="block text-[11px] text-stone-400">
                               {r.name} · {formatTime(new Date(r.createdAt))}
@@ -1160,7 +1206,9 @@ export default function HomePage() {
                     ? '🎙️ Audio'
                     : replyTo.type === 'music'
                       ? `🎵 ${replyTo.music?.title ?? 'Música'}`
-                      : replyTo.content}
+                      : replyTo.type === 'sticker'
+                        ? '✨ Sticker'
+                        : replyTo.content}
               </p>
             </div>
             <button
@@ -1235,6 +1283,16 @@ export default function HomePage() {
                       type="button"
                       onClick={() => {
                         setAttachOpen(false)
+                        setStickerOpen(true)
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-rose-50 text-sm text-stone-700"
+                    >
+                      <StickerIcon className="w-5 h-5 text-rose-500" /> Sticker
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAttachOpen(false)
                         audioRef.current?.start()
                       }}
                       className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-rose-50 text-sm text-stone-700"
@@ -1251,6 +1309,11 @@ export default function HomePage() {
                   setGifOpen(false)
                   setPhotoDataUrl(dataUrl)
                 }}
+              />
+              <StickerPicker
+                open={stickerOpen}
+                onClose={() => setStickerOpen(false)}
+                onPick={handleSendSticker}
               />
             </div>
           ) : null}
@@ -1314,6 +1377,26 @@ export default function HomePage() {
                 <ImagePlus className="w-5 h-5" />
               )}
             </Button>
+          )}
+
+          {!isMobile && (
+            <div className="relative shrink-0">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => setStickerOpen((v) => !v)}
+                disabled={uploading}
+                aria-label="Enviar sticker"
+                title="Stickers"
+                className={`w-11 h-11 rounded-full ${
+                  stickerOpen ? 'text-rose-500 bg-rose-50' : 'text-stone-400 hover:text-rose-500 hover:bg-rose-50'
+                }`}
+              >
+                <StickerIcon className="w-5 h-5" />
+              </Button>
+              <StickerPicker open={stickerOpen} onClose={() => setStickerOpen(false)} onPick={handleSendSticker} />
+            </div>
           )}
 
           {!isMobile && (
