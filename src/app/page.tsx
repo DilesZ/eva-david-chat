@@ -98,6 +98,7 @@ export default function HomePage() {
   const [searchResults, setSearchResults] = useState<ChatMessage[]>([])
   const [searching, setSearching] = useState(false)
   const [highlightId, setHighlightId] = useState<number | null>(null)
+  const [replyTo, setReplyTo] = useState<ChatMessage | null>(null)
 
   const socketRef = useRef<Socket | null>(null)
   const bottomRef = useRef<HTMLDivElement | null>(null)
@@ -127,6 +128,9 @@ export default function HomePage() {
     setSettingsOpen(false)
     setEmojiOpen(false)
     setPhotoDataUrl(null)
+    setReplyTo(null)
+    setSearchOpen(false)
+    setSearchResults([])
     document.title = BASE_TITLE
   }, [])
 
@@ -288,9 +292,16 @@ export default function HomePage() {
         }
         const fresh: ChatMessage[] = (data.messages ?? []).filter(isValidMessage)
         const edited: ChatMessage[] = (data.edited ?? []).filter(isValidMessage)
+        const synced: ChatMessage[] = (data.reactionSync ?? []).filter(isValidMessage)
         const deletedIds: number[] = Array.isArray(data.deletedIds) ? data.deletedIds : []
         const readIds: number[] = Array.isArray(data.readIds) ? data.readIds : []
-        if (fresh.length === 0 && edited.length === 0 && deletedIds.length === 0 && readIds.length === 0) {
+        if (
+          fresh.length === 0 &&
+          edited.length === 0 &&
+          synced.length === 0 &&
+          deletedIds.length === 0 &&
+          readIds.length === 0
+        ) {
           return
         }
         let ping = false
@@ -303,6 +314,10 @@ export default function HomePage() {
           }
           if (edited.length > 0) {
             const byId = new Map(edited.map((m) => [m.id, m]))
+            next = next.map((m) => byId.get(m.id) ?? m)
+          }
+          if (synced.length > 0) {
+            const byId = new Map(synced.map((m) => [m.id, m]))
             next = next.map((m) => byId.get(m.id) ?? m)
           }
           if (readIds.length > 0) {
@@ -458,7 +473,7 @@ export default function HomePage() {
       const res = await fetch('/api/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content }),
+        body: JSON.stringify({ content, ...(replyTo ? { replyToId: replyTo.id } : {}) }),
       })
       if (res.status === 401) {
         toast({ title: 'Tu sesión ha caducado', description: 'Vuelve a iniciar sesión.' })
@@ -479,6 +494,7 @@ export default function HomePage() {
         )
       }
       setDraft('')
+      setReplyTo(null)
       resetTextareaHeight()
       textareaRef.current?.focus()
     } catch {
@@ -568,6 +584,30 @@ export default function HomePage() {
     setSearchOpen(false)
   }
 
+  // ---- reacciones ----
+
+  async function handleReact(id: number, emoji: string) {
+    try {
+      const res = await fetch(`/api/messages/${id}/reactions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emoji }),
+      })
+      const data = await res.json().catch(() => null)
+      if (!res.ok || !data?.message || !isValidMessage(data.message)) {
+        toast({
+          title: 'No se pudo reaccionar',
+          description: data?.error ?? 'Inténtalo de nuevo.',
+        })
+        return
+      }
+      const updated = data.message as ChatMessage
+      setMessages((prev) => prev.map((m) => (m.id === id ? updated : m)))
+    } catch {
+      toast({ title: 'No se pudo reaccionar', description: 'Comprueba tu conexión.' })
+    }
+  }
+
   // ---- fotos ----
 
   async function handlePhotoFile(file: File | null | undefined) {
@@ -594,7 +634,11 @@ export default function HomePage() {
       const res = await fetch('/api/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: caption, image: photoDataUrl }),
+        body: JSON.stringify({
+          content: caption,
+          image: photoDataUrl,
+          ...(replyTo ? { replyToId: replyTo.id } : {}),
+        }),
       })
       if (res.status === 401) {
         toast({ title: 'Tu sesión ha caducado', description: 'Vuelve a iniciar sesión.' })
@@ -615,6 +659,7 @@ export default function HomePage() {
         )
       }
       setPhotoDataUrl(null)
+      setReplyTo(null)
       textareaRef.current?.focus()
     } catch {
       toast({ title: 'No se pudo enviar la foto', description: 'Comprueba tu conexión.' })
@@ -760,6 +805,12 @@ export default function HomePage() {
         onImageClick={setLightboxUrl}
         onEdit={msg.username === me.username ? handleEditMessage : undefined}
         onDelete={msg.username === me.username ? handleDeleteMessage : undefined}
+        onReply={(m) => {
+          setReplyTo(m)
+          textareaRef.current?.focus()
+        }}
+        onReact={handleReact}
+        onJumpTo={jumpToMessage}
         highlighted={highlightId === msg.id}
       />,
     )
@@ -952,6 +1003,26 @@ export default function HomePage() {
       )}
 
       <footer className="shrink-0 border-t border-rose-100 bg-white/80 backdrop-blur px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)]">
+        {replyTo && (
+          <div className="max-w-2xl mx-auto mb-2 flex items-center gap-2 bg-rose-50 border border-rose-100 rounded-2xl px-3 py-2">
+            <div className="flex-1 min-w-0">
+              <p className="text-[11px] font-semibold text-rose-500">
+                Respondiendo a {replyTo.name}
+              </p>
+              <p className="text-[12px] text-stone-500 truncate">
+                {replyTo.type === 'image' ? '📷 Foto' : replyTo.content}
+              </p>
+            </div>
+            <button
+              type="button"
+              aria-label="Cancelar respuesta"
+              onClick={() => setReplyTo(null)}
+              className="p-1.5 rounded-full text-stone-400 hover:bg-rose-100 hover:text-rose-500 shrink-0"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
         <form onSubmit={handleSend} className="max-w-2xl mx-auto flex items-end gap-2 relative">
           <input
             ref={photoInputRef}

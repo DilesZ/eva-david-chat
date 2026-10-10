@@ -1,16 +1,7 @@
 import { db } from './db'
+import type { ChatMessage } from '@/components/chat/types'
 
-export type MessagePayload = {
-  id: number
-  content: string
-  type: string
-  createdAt: string
-  imageUrl: string | null
-  readAt: string | null
-  editedAt: string | null
-  username: string
-  name: string
-}
+export type MessagePayload = ChatMessage
 
 type MessageWithUser = {
   id: number
@@ -19,6 +10,7 @@ type MessageWithUser = {
   createdAt: Date
   readAt: Date | null
   editedAt: Date | null
+  replyToId: number | null
   user: { username: string; name: string }
 }
 
@@ -33,10 +25,103 @@ export function toPayload(m: MessageWithUser): MessagePayload {
     editedAt: m.editedAt ? m.editedAt.toISOString() : null,
     username: m.user.username,
     name: m.user.name,
+    replyTo: null,
+    reactions: [],
   }
 }
 
-export const messageInclude = { user: { select: { username: true, name: true } } } as const
+export const messageInclude = {
+  user: { select: { username: true, name: true } },
+} as const
+
+type ReactionRow = {
+  messageId: number
+  emoji: string
+  user: { username: string; name: string }
+}
+
+// Añade citas y reacciones a una lista de payloads (una sola ronda de consultas)
+export async function withExtras(
+  payloads: MessagePayload[],
+  meUsername: string,
+): Promise<MessagePayload[]> {
+  if (payloads.length === 0) return payloads
+  const ids = payloads.map((p) => p.id)
+
+  const [reactions, parents] = await Promise.all([
+    db.reaction.findMany({
+      where: { messageId: { in: ids } },
+      select: { messageId: true, emoji: true, user: { select: { username: true, name: true } } },
+      orderBy: [{ id: 'asc' }],
+    }) as Promise<ReactionRow[]>,
+    db.message.findMany({
+      where: { id: { in: payloads.map((p) => p.id) } },
+      select: {
+        id: true,
+        replyTo: {
+          select: {
+            id: true,
+            content: true,
+            type: true,
+            user: { select: { username: true, name: true } },
+          },
+        },
+      },
+    }),
+  ])
+
+  const parentById = new Map<
+    number,
+    { id: number; content: string; type: string; username: string; name: string } | null
+  >()
+  for (const row of parents as unknown as {
+    id: number
+    replyTo: {
+      id: number
+      content: string
+      type: string
+      user: { username: string; name: string }
+    } | null
+  }[]) {
+    parentById.set(
+      row.id,
+      row.replyTo
+        ? {
+            id: row.replyTo.id,
+            content: row.replyTo.content,
+            type: row.replyTo.type,
+            username: row.replyTo.user.username,
+            name: row.replyTo.user.name,
+          }
+        : null,
+    )
+  }
+
+  const reactionsByMessage = new Map<number, ChatMessage['reactions']>()
+  for (const r of reactions) {
+    const list = reactionsByMessage.get(r.messageId) ?? []
+    const existing = list.find((x) => x.emoji === r.emoji)
+    if (existing) {
+      existing.count += 1
+      existing.users.push(r.user.name)
+      if (r.user.username === meUsername) existing.mine = true
+    } else {
+      list.push({
+        emoji: r.emoji,
+        count: 1,
+        mine: r.user.username === meUsername,
+        users: [r.user.name],
+      })
+    }
+    reactionsByMessage.set(r.messageId, list)
+  }
+
+  return payloads.map((p) => ({
+    ...p,
+    replyTo: parentById.get(p.id) ?? null,
+    reactions: reactionsByMessage.get(p.id) ?? [],
+  }))
+}
 
 // Ventanas de presencia (ver README de polling en page.tsx)
 export const ONLINE_WINDOW_MS = 35_000
@@ -53,3 +138,6 @@ export async function partnerPresence(partnerId: number) {
     typing: !!partner?.typingAt && now - partner.typingAt.getTime() < TYPING_WINDOW_MS,
   }
 }
+
+// Emojis permitidos para reaccionar (conjunto corto y común)
+export const REACTION_EMOJIS = ['❤️', '😂', '😮', '😢', '👍', '🙏'] as const

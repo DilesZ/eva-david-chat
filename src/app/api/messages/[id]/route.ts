@@ -3,7 +3,7 @@
 import { NextResponse } from 'next/server'
 import { db, ensureDb } from '@/lib/db'
 import { getSession } from '@/lib/auth'
-import { toPayload, messageInclude } from '@/lib/messages'
+import { toPayload, withExtras, messageInclude } from '@/lib/messages'
 
 const MAX_CONTENT_LENGTH = 2000
 const MAX_CAPTION_LENGTH = 500
@@ -46,7 +46,8 @@ export async function PATCH(
     data: { content, editedAt: new Date() },
     include: messageInclude,
   })
-  return NextResponse.json({ message: toPayload(updated) })
+  const [payload] = await withExtras([toPayload(updated)], session.user.username)
+  return NextResponse.json({ message: payload })
 }
 
 export async function DELETE(

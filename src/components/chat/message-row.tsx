@@ -1,9 +1,10 @@
 'use client'
 
-// Burbuja de mensaje: texto y/o foto, hora, marcas de enviado/visto (✓ / ✓✓),
-// etiqueta "editado", y acciones de editar/borrar en mensajes propios.
+// Burbuja de mensaje: texto y/o foto, cita respondida, reacciones con emoji,
+// hora, marcas de enviado/visto (✓ / ✓✓), etiqueta "editado",
+// y acciones de responder/editar/borrar.
 import { useState } from 'react'
-import { Check, CheckCheck, Pencil, Trash2 } from 'lucide-react'
+import { Check, CheckCheck, Pencil, Trash2, Reply, SmilePlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import {
@@ -18,6 +19,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import type { ChatMessage } from './types'
 import { styleFor, formatTime } from './utils'
+import { REACTION_EMOJIS } from '@/lib/messages'
 
 export function MessageRow({
   msg,
@@ -25,6 +27,9 @@ export function MessageRow({
   onImageClick,
   onEdit,
   onDelete,
+  onReply,
+  onReact,
+  onJumpTo,
   highlighted,
 }: {
   msg: ChatMessage
@@ -32,6 +37,9 @@ export function MessageRow({
   onImageClick: (url: string) => void
   onEdit?: (id: number, content: string) => Promise<boolean>
   onDelete?: (id: number) => void
+  onReply?: (msg: ChatMessage) => void
+  onReact?: (id: number, emoji: string) => void
+  onJumpTo?: (id: number) => void
   highlighted?: boolean
 }) {
   const style = styleFor(msg.username)
@@ -42,6 +50,7 @@ export function MessageRow({
   const [editText, setEditText] = useState(msg.content)
   const [saving, setSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [reactOpen, setReactOpen] = useState(false)
 
   async function handleSaveEdit() {
     if (!onEdit || saving) return
@@ -56,6 +65,8 @@ export function MessageRow({
     setSaving(false)
     if (ok) setEditing(false)
   }
+
+  const reactions = Array.isArray(msg.reactions) ? msg.reactions : []
 
   return (
     <div
@@ -81,6 +92,21 @@ export function MessageRow({
             hasImage ? 'p-1.5' : 'px-4 py-2.5'
           } ${own ? 'rounded-br-md' : 'rounded-bl-md'}`}
         >
+          {msg.replyTo && (
+            <button
+              type="button"
+              onClick={() => onJumpTo?.(msg.replyTo!.id)}
+              title={`Ir al mensaje de ${msg.replyTo.name}`}
+              className="block w-full text-left mb-1.5 rounded-lg bg-black/10 hover:bg-black/15 px-2.5 py-1.5 transition"
+            >
+              <span className={`block text-[11px] font-semibold ${own ? '' : style.label}`}>
+                {msg.replyTo.name}
+              </span>
+              <span className="block text-[12px] leading-snug truncate opacity-90">
+                {msg.replyTo.type === 'image' ? '📷 Foto' : msg.replyTo.content}
+              </span>
+            </button>
+          )}
           {hasImage && (
             <img
               src={msg.imageUrl ?? ''}
@@ -139,6 +165,57 @@ export function MessageRow({
             )
           )}
         </div>
+
+        {reactions.length > 0 && (
+          <div className={`flex flex-wrap items-center gap-1 mt-1 ${own ? 'justify-end' : ''}`}>
+            {reactions.map((r) => (
+              <button
+                key={r.emoji}
+                type="button"
+                title={r.users.join(', ')}
+                onClick={() => onReact?.(msg.id, r.emoji)}
+                className={`flex items-center gap-0.5 text-[13px] leading-none px-2 py-1 rounded-full border shadow-sm transition ${
+                  r.mine
+                    ? 'bg-rose-100 border-rose-300'
+                    : 'bg-white border-stone-200 hover:border-rose-200'
+                }`}
+              >
+                <span>{r.emoji}</span>
+                <span className="text-[11px] font-semibold text-stone-500">{r.count}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {reactOpen && onReact && (
+          <div className={`flex items-center gap-0.5 mt-1 ${own ? 'justify-end' : ''}`}>
+            <span className="flex items-center gap-0.5 bg-white border border-stone-200 rounded-full px-1.5 py-1 shadow-sm">
+              {REACTION_EMOJIS.map((e) => (
+                <button
+                  key={e}
+                  type="button"
+                  aria-label={`Reaccionar con ${e}`}
+                  onClick={() => {
+                    onReact(msg.id, e)
+                    setReactOpen(false)
+                  }}
+                  className="text-[16px] leading-none p-0.5 rounded-full hover:bg-rose-50 hover:scale-125 transition"
+                >
+                  {e}
+                </button>
+              ))}
+              <button
+                type="button"
+                aria-label="Cerrar reacciones"
+                onClick={() => setReactOpen(false)}
+                className="text-[12px] leading-none p-0.5 px-1 rounded-full text-stone-400 hover:text-stone-600"
+              >
+                ✕
+              </button>
+            </span>
+          </div>
+        )}
+
         <span
           className={`text-[10px] text-stone-400 mt-0.5 px-1 flex items-center gap-1 ${
             own ? 'flex-row-reverse' : ''
@@ -152,6 +229,28 @@ export function MessageRow({
             ) : (
               <Check className="w-3.5 h-3.5 text-stone-300" aria-label="Enviado" />
             ))}
+          {onReply && (
+            <button
+              type="button"
+              aria-label="Responder citando"
+              title="Responder"
+              onClick={() => onReply(msg)}
+              className="p-1 rounded-full opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:bg-stone-200/70 text-stone-400 hover:text-stone-600 transition"
+            >
+              <Reply className="w-3 h-3" />
+            </button>
+          )}
+          {onReact && (
+            <button
+              type="button"
+              aria-label="Añadir reacción"
+              title="Reaccionar"
+              onClick={() => setReactOpen((v) => !v)}
+              className="p-1 rounded-full opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:bg-stone-200/70 text-stone-400 hover:text-rose-500 transition"
+            >
+              <SmilePlus className="w-3 h-3" />
+            </button>
+          )}
           {own && !editing && (onEdit || onDelete) && (
             <span className="flex items-center gap-0.5 ml-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
               {msg.type === 'text' && onEdit && (

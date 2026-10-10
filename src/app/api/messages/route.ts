@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server'
 import { db, ensureDb } from '@/lib/db'
 import { getSession } from '@/lib/auth'
 import { broadcastEvent } from '@/lib/broadcast'
-import { toPayload, messageInclude, partnerPresence } from '@/lib/messages'
+import { toPayload, withExtras, messageInclude, partnerPresence } from '@/lib/messages'
 
 const MAX_MESSAGES = 500
 const MAX_CONTENT_LENGTH = 2000
@@ -47,7 +47,7 @@ export async function GET(req: Request) {
   const since = sinceParam ? new Date(sinceParam) : null
   const validSince = since && !Number.isNaN(since.getTime()) ? since : null
 
-  // Carga inicial: últimos 500 no borrados
+  // Carga inicial: últimos 500 no borrados (con citas y reacciones)
   if (!validSince) {
     const messages = await db.message.findMany({
       where: { deletedAt: null },
@@ -55,17 +55,22 @@ export async function GET(req: Request) {
       take: MAX_MESSAGES,
       include: messageInclude,
     })
+    const payloads = await withExtras(
+      messages.reverse().map(toPayload),
+      session.user.username,
+    )
     return NextResponse.json({
-      messages: messages.reverse().map(toPayload),
+      messages: payloads,
       edited: [],
       deletedIds: [],
       readIds: [],
+      reactionSync: [],
       partner: presence,
     })
   }
 
-  // Poll incremental: nuevos + editados + borrados + leídos desde `since`
-  const [fresh, edited, deleted, read] = await Promise.all([
+  // Poll incremental: nuevos + editados + borrados + leídos + reacciones desde `since`
+  const [fresh, edited, deleted, read, touched] = await Promise.all([
     db.message.findMany({
       where: { deletedAt: null, createdAt: { gt: validSince } },
       orderBy: [{ id: 'asc' }],
@@ -88,13 +93,33 @@ export async function GET(req: Request) {
       select: { id: true },
       take: MAX_MESSAGES,
     }),
+    db.message.findMany({
+      where: { deletedAt: null, reactionsUpdatedAt: { gt: validSince } },
+      orderBy: [{ id: 'asc' }],
+      take: MAX_MESSAGES,
+      include: messageInclude,
+    }),
   ])
 
+  const freshIds = new Set(fresh.map((m) => m.id))
+  const editedIds = new Set(edited.map((m) => m.id))
+  const onlyTouched = touched.filter((m) => !freshIds.has(m.id) && !editedIds.has(m.id))
+
   return NextResponse.json({
-    messages: fresh.map(toPayload),
-    edited: edited.map(toPayload),
+    messages: await withExtras(
+      fresh.map(toPayload),
+      session.user.username,
+    ),
+    edited: await withExtras(
+      edited.map(toPayload),
+      session.user.username,
+    ),
     deletedIds: deleted.map((m) => m.id),
     readIds: read.map((m) => m.id),
+    reactionSync: await withExtras(
+      onlyTouched.map(toPayload),
+      session.user.username,
+    ),
     partner: presence,
   })
 }
@@ -113,6 +138,10 @@ export async function POST(req: Request) {
 
   const content = typeof body.content === 'string' ? body.content.trim() : ''
   const image = typeof body.image === 'string' ? body.image : ''
+  const replyToId =
+    typeof body.replyToId === 'number' && Number.isInteger(body.replyToId) && body.replyToId > 0
+      ? body.replyToId
+      : null
 
   // --- Validación según el tipo de mensaje ---
   if (!image && !content) {
@@ -143,17 +172,28 @@ export async function POST(req: Request) {
     imageData = { mime, data, size }
   }
 
+  if (replyToId) {
+    const parent = await db.message.findFirst({
+      where: { id: replyToId, deletedAt: null },
+      select: { id: true },
+    })
+    if (!parent) {
+      return NextResponse.json({ error: 'El mensaje citado ya no existe' }, { status: 400 })
+    }
+  }
+
   const created = await db.message.create({
     data: {
       content,
       type: image ? 'image' : 'text',
       userId: session.user.id,
+      replyToId: replyToId ?? undefined,
       ...(imageData ? { image: { create: imageData } } : {}),
     },
     include: messageInclude,
   })
 
-  const payload = toPayload(created)
+  const [payload] = await withExtras([toPayload(created)], session.user.username)
 
   // Difunde el mensaje en tiempo real a través del servicio de websocket
   try {

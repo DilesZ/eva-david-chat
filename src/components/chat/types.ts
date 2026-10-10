@@ -21,4 +21,17 @@ export type ChatMessage = {
   editedAt: string | null
   username: string
   name: string
+  replyTo: {
+    id: number
+    username: string
+    name: string
+    content: string
+    type: string
+  } | null
+  reactions: {
+    emoji: string
+    count: number
+    mine: boolean
+    users: string[]
+  }[]
 }

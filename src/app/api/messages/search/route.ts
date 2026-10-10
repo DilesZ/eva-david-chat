@@ -2,7 +2,7 @@
 import { NextResponse } from 'next/server'
 import { db, ensureDb } from '@/lib/db'
 import { getSession } from '@/lib/auth'
-import { toPayload, messageInclude } from '@/lib/messages'
+import { withExtras, toPayload, messageInclude } from '@/lib/messages'
 
 export async function GET(req: Request) {
   await ensureDb()
@@ -23,5 +23,10 @@ export async function GET(req: Request) {
     include: messageInclude,
   })
 
-  return NextResponse.json({ messages: messages.map(toPayload) })
+  return NextResponse.json({
+    messages: await withExtras(
+      messages.map(toPayload),
+      session.user.username,
+    ),
+  })
 }

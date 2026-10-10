@@ -20,22 +20,42 @@ model User {
   messages    Message[]
   sessions    Session[]
   resetTokens PasswordResetToken[]
+  reactions   Reaction[]
   createdAt   DateTime             @default(now())
 }
 
 model Message {
-  id        Int           @id @default(autoincrement())
-  content   String        @default("")
-  type      String        @default("text") // "text" | "image"
-  readAt    DateTime?
-  editedAt  DateTime? // última edición (se muestra "editado")
-  deletedAt DateTime? // borrado suave: se oculta pero se sincroniza el id
-  userId    Int
-  user      User          @relation(fields: [userId], references: [id])
-  createdAt DateTime      @default(now())
-  image     MessageImage?
+  id                 Int           @id @default(autoincrement())
+  content            String        @default("")
+  type               String        @default("text") // "text" | "image"
+  readAt             DateTime?
+  editedAt           DateTime? // última edición (se muestra "editado")
+  deletedAt          DateTime? // borrado suave: se oculta pero se sincroniza el id
+  reactionsUpdatedAt DateTime? // último cambio de reacciones (para sincronizar por polling)
+  replyToId          Int? // mensaje citado (responder)
+  replyTo            Message?      @relation("Replies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies            Message[]     @relation("Replies")
+  userId             Int
+  user               User          @relation(fields: [userId], references: [id])
+  createdAt          DateTime      @default(now())
+  image              MessageImage?
+  reactions          Reaction[]
 
   @@index([createdAt])
+}
+
+// Reacción con emoji a un mensaje. Sin fila = sin reacción (toggle).
+model Reaction {
+  id        Int      @id @default(autoincrement())
+  emoji     String
+  messageId Int
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([messageId, userId, emoji])
+  @@index([messageId])
 }
 
 // Las fotos se guardan como base64 dentro de la BD para que funcionen
