@@ -3,7 +3,19 @@
 import { NextResponse } from 'next/server'
 import { db, ensureDb } from '@/lib/db'
 import { getSession } from '@/lib/auth'
-import { REACTION_EMOJIS, toPayload, withExtras, messageInclude } from '@/lib/messages'
+import { toPayload, withExtras, messageInclude } from '@/lib/messages'
+
+// Acepta cualquier emoji Unicode (pictográfico, con modificadores, ZWJ o banderas),
+// con un tope de longitud para evitar basura. El VS16 se normaliza para agrupar.
+function normalizeEmoji(raw: string): string | null {
+  const emoji = raw.replace(/\uFE0F/g, '')
+  if (!emoji || [...emoji].length > 12) return null
+  const ok =
+    /^(?:\p{Extended_Pictographic}(?:\u200D\p{Extended_Pictographic})*[\u{1F3FB}-\u{1F3FF}]?\u20E3?|\p{Regional_Indicator}{2}|[#*0-9]\u20E3)$/u.test(
+      emoji,
+    )
+  return ok ? emoji : null
+}
 
 export async function POST(
   req: Request,
@@ -21,11 +33,10 @@ export async function POST(
   }
 
   const body = await req.json().catch(() => null)
-  // Normaliza el emoji (quita el selector de variación VS16: ❤️ y ❤ son el mismo)
   const raw = typeof body?.emoji === 'string' ? body.emoji : ''
-  const emoji = raw.replace(/\uFE0F/g, '');
-  if (!(REACTION_EMOJIS as readonly string[]).includes(emoji)) {
-    return NextResponse.json({ error: 'Emoji no permitido' }, { status: 400 })
+  const emoji = normalizeEmoji(raw)
+  if (!emoji) {
+    return NextResponse.json({ error: 'Emoji no válido' }, { status: 400 })
   }
 
   const target = await db.message.findFirst({

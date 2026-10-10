@@ -35,7 +35,7 @@ import {
 import { MessageRow } from '@/components/chat/message-row'
 import { TypingBubble } from '@/components/chat/typing-bubble'
 import { Lightbox } from '@/components/chat/lightbox'
-import { EmojiPicker } from '@/components/chat/emoji-picker'
+import { FullEmojiPicker } from '@/components/chat/full-emoji-picker'
 import { PhotoDialog } from '@/components/chat/photo-dialog'
 import { GalleryDialog } from '@/components/chat/gallery-dialog'
 import { AudioRecorder } from '@/components/chat/audio-recorder'
@@ -1097,7 +1097,7 @@ export default function HomePage() {
             >
               <Smile className="w-5 h-5" />
             </Button>
-            <EmojiPicker
+            <FullEmojiPicker
               open={emojiOpen}
               onClose={() => setEmojiOpen(false)}
               onPick={(emoji) => {

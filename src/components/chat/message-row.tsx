@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import type { ChatMessage } from './types'
 import { styleFor, formatTime } from './utils'
-import { REACTION_EMOJIS } from '@/lib/messages'
+import { FullEmojiPicker } from './full-emoji-picker'
 
 export function MessageRow({
   msg,
@@ -73,10 +73,21 @@ export function MessageRow({
   return (
     <div
       data-message-id={msg.id}
-      className={`group flex items-end gap-2 ${own ? 'flex-row-reverse justify-start' : ''} ${
+      className={`group relative flex items-end gap-2 ${own ? 'flex-row-reverse justify-start' : ''} ${
         highlighted ? 'rounded-2xl ring-2 ring-amber-400 bg-amber-50/60 -m-1 p-1' : ''
       }`}
     >
+      {onReact && (
+        <FullEmojiPicker
+          open={reactOpen}
+          onClose={() => setReactOpen(false)}
+          onPick={(emoji) => {
+            onReact(msg.id, emoji)
+            setReactOpen(false)
+          }}
+          positionClassName={`bottom-full mb-1 ${own ? 'right-0' : 'left-0'}`}
+        />
+      )}
       <div
         className={`w-8 h-8 shrink-0 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-sm ${style.avatar}`}
         aria-hidden="true"
@@ -198,35 +209,6 @@ export function MessageRow({
                 <span className="text-[11px] font-semibold text-stone-500">{r.count}</span>
               </button>
             ))}
-          </div>
-        )}
-
-        {reactOpen && onReact && (
-          <div className={`flex items-center gap-0.5 mt-1 ${own ? 'justify-end' : ''}`}>
-            <span className="flex items-center gap-0.5 bg-white border border-stone-200 rounded-full px-1.5 py-1 shadow-sm">
-              {REACTION_EMOJIS.map((e) => (
-                <button
-                  key={e}
-                  type="button"
-                  aria-label={`Reaccionar con ${e}`}
-                  onClick={() => {
-                    onReact(msg.id, e)
-                    setReactOpen(false)
-                  }}
-                  className="text-[16px] leading-none p-0.5 rounded-full hover:bg-rose-50 hover:scale-125 transition"
-                >
-                  {e}
-                </button>
-              ))}
-              <button
-                type="button"
-                aria-label="Cerrar reacciones"
-                onClick={() => setReactOpen(false)}
-                className="text-[12px] leading-none p-0.5 px-1 rounded-full text-stone-400 hover:text-stone-600"
-              >
-                ✕
-              </button>
-            </span>
           </div>
         )}
 
