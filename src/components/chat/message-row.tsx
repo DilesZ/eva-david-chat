@@ -3,8 +3,8 @@
 // Burbuja de mensaje: texto y/o foto, cita respondida, reacciones con emoji,
 // hora, marcas de enviado/visto (✓ / ✓✓), etiqueta "editado",
 // y acciones de responder/editar/borrar.
-import { useState } from 'react'
-import { Check, CheckCheck, Pencil, Trash2, Reply, SmilePlus } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { Check, CheckCheck, Pencil, Trash2, Reply, SmilePlus, Copy, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import {
@@ -54,6 +54,81 @@ export function MessageRow({
   const [saving, setSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [reactOpen, setReactOpen] = useState(false)
+  const [sheetOpen, setSheetOpen] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const pressTimer = useRef<number | null>(null)
+  const pressStart = useRef<{ x: number; y: number } | null>(null)
+  const longPressed = useRef(false)
+
+  function clearPressTimer() {
+    if (pressTimer.current) {
+      window.clearTimeout(pressTimer.current)
+      pressTimer.current = null
+    }
+  }
+
+  // Solo elementos interactivos (imagen, botones, audio...) gestionan su propio toque
+  function isInteractiveTarget(target: EventTarget | null): boolean {
+    const el = target as HTMLElement | null
+    return !!el?.closest?.('img,button,a,textarea,audio,input')
+  }
+
+  function handleTouchStart(e: React.TouchEvent) {
+    if (editing || isInteractiveTarget(e.target)) return
+    const t = e.touches[0]
+    pressStart.current = { x: t.clientX, y: t.clientY }
+    longPressed.current = false
+    clearPressTimer()
+    pressTimer.current = window.setTimeout(() => {
+      longPressed.current = true
+      try {
+        navigator.vibrate?.(15)
+      } catch {
+        // sin vibración
+      }
+      setReactOpen(false)
+      setSheetOpen(true)
+    }, 500)
+  }
+
+  function handleTouchMove(e: React.TouchEvent) {
+    if (!pressStart.current) return
+    const t = e.touches[0]
+    const dx = t.clientX - pressStart.current.x
+    const dy = t.clientY - pressStart.current.y
+    if (dx * dx + dy * dy > 100) {
+      // es scroll, no pulsación
+      clearPressTimer()
+      pressStart.current = null
+    }
+  }
+
+  function handleTouchEnd(e: React.TouchEvent) {
+    const wasPress = !!pressStart.current
+    clearPressTimer()
+    pressStart.current = null
+    if (!wasPress || longPressed.current || editing || isInteractiveTarget(e.target)) return
+    // Toque rápido: abre/cierra el picker de reacciones
+    setSheetOpen(false)
+    setReactOpen((v) => !v)
+  }
+
+  async function handleCopy() {
+    if (!msg.content) return
+    try {
+      await navigator.clipboard.writeText(msg.content)
+    } catch {
+      const ta = document.createElement('textarea')
+      ta.value = msg.content
+      document.body.appendChild(ta)
+      ta.select()
+      document.execCommand('copy')
+      document.body.removeChild(ta)
+    }
+    setCopied(true)
+    window.setTimeout(() => setCopied(false), 1500)
+    setSheetOpen(false)
+  }
 
   async function handleSaveEdit() {
     if (!onEdit || saving) return
@@ -106,9 +181,13 @@ export function MessageRow({
           <span className={`text-[11px] font-semibold mb-0.5 px-1 ${style.label}`}>{msg.name}</span>
         )}
         <div
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+          onContextMenu={(e) => e.preventDefault()}
           className={`rounded-2xl shadow-sm ${style.bubble} ${
             hasImage ? 'p-1.5' : 'px-4 py-2.5'
-          } ${own ? 'rounded-br-md' : 'rounded-bl-md'}`}
+          } ${own ? 'rounded-br-md' : 'rounded-bl-md'} select-none`}
         >
           {msg.replyTo && (
             <button
@@ -223,6 +302,7 @@ export function MessageRow({
           }`}
         >
           {formatTime(new Date(msg.createdAt))}
+          {copied && <span className="text-emerald-500 font-semibold">· ¡copiado!</span>}
           {edited && <span className="italic">· editado</span>}
           {own &&
             (read ? (
@@ -283,6 +363,77 @@ export function MessageRow({
           )}
         </span>
       </div>
+
+      {sheetOpen && (
+        <>
+          <button
+            type="button"
+            aria-label="Cerrar menú"
+            onClick={() => setSheetOpen(false)}
+            className="fixed inset-0 z-40 cursor-default bg-black/40"
+          />
+          <div
+            role="dialog"
+            aria-label="Opciones del mensaje"
+            className="fixed bottom-0 inset-x-0 z-50 bg-white rounded-t-3xl shadow-2xl p-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] animate-in slide-in-from-bottom"
+          >
+            <div className="w-10 h-1 rounded-full bg-stone-200 mx-auto my-2" aria-hidden="true" />
+            {onReply && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSheetOpen(false)
+                  onReply(msg)
+                }}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl hover:bg-rose-50 text-[15px] text-stone-700"
+              >
+                <Reply className="w-5 h-5 text-rose-500" /> Responder
+              </button>
+            )}
+            {msg.content && (
+              <button
+                type="button"
+                onClick={handleCopy}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl hover:bg-rose-50 text-[15px] text-stone-700"
+              >
+                <Copy className="w-5 h-5 text-rose-500" /> Copiar texto
+              </button>
+            )}
+            {own && onEdit && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSheetOpen(false)
+                  setEditText(msg.content)
+                  setEditing(true)
+                }}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl hover:bg-rose-50 text-[15px] text-stone-700"
+              >
+                <Pencil className="w-5 h-5 text-rose-500" /> Editar
+              </button>
+            )}
+            {own && onDelete && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSheetOpen(false)
+                  setConfirmDelete(true)
+                }}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl hover:bg-red-50 text-[15px] text-red-500"
+              >
+                <Trash2 className="w-5 h-5" /> Borrar
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setSheetOpen(false)}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl hover:bg-stone-100 text-[15px] text-stone-500"
+            >
+              <X className="w-5 h-5" /> Cancelar
+            </button>
+          </div>
+        </>
+      )}
 
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <AlertDialogContent className="rounded-3xl">
