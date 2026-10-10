@@ -21,6 +21,11 @@ export function FullEmojiPicker({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [data, setData] = useState<any>(null)
   const boxRef = useRef<HTMLDivElement | null>(null)
+  const mountedAt = useRef(0)
+
+  useEffect(() => {
+    if (open) mountedAt.current = Date.now()
+  }, [open ])
 
   useEffect(() => {
     if (!open || Picker) return
@@ -51,6 +56,8 @@ export function FullEmojiPicker({
   useEffect(() => {
     if (!open) return
     const onDown = (e: MouseEvent) => {
+      // Ignora el mousedown fantasma del propio toque que abrió el picker
+      if (Date.now() - mountedAt.current < 500) return
       if (boxRef.current && !boxRef.current.contains(e.target as Node)) onClose()
     }
     const onKey = (e: KeyboardEvent) => {

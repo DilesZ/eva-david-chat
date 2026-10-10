@@ -46,6 +46,11 @@ export function GifPicker({
   const [converting, setConverting] = useState<string | null>(null)
   const boxRef = useRef<HTMLDivElement | null>(null)
   const debounceRef = useRef<number | null>(null)
+  const mountedAt = useRef(0)
+
+  useEffect(() => {
+    if (open) mountedAt.current = Date.now()
+  }, [open ])
 
   useEffect(() => {
     if (!open || !GIPHY_KEY) return
@@ -69,6 +74,8 @@ export function GifPicker({
   useEffect(() => {
     if (!open) return
     const onDown = (e: MouseEvent) => {
+      // Ignora el mousedown fantasma del propio toque que abrió el picker
+      if (Date.now() - mountedAt.current < 500) return
       if (boxRef.current && !boxRef.current.contains(e.target as Node)) onClose()
     }
     const onKey = (e: KeyboardEvent) => {

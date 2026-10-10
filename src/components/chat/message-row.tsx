@@ -108,7 +108,10 @@ export function MessageRow({
     clearPressTimer()
     pressStart.current = null
     if (!wasPress || longPressed.current || editing || isInteractiveTarget(e.target)) return
-    // Toque rápido: abre/cierra el picker de reacciones
+    // Toque rápido: abre/cierra el picker de reacciones.
+    // preventDefault evita el mousedown "fantasma" que el navegador emite
+    // tras el touchend y que cerraría el picker al instante.
+    e.preventDefault()
     setSheetOpen(false)
     setReactOpen((v) => !v)
   }
