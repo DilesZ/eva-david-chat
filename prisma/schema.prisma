@@ -24,6 +24,7 @@ model User {
   resetTokens PasswordResetToken[]
   reactions   Reaction[]
   pushSubscriptions PushSubscription[]
+  songs       Song[]
   createdAt   DateTime             @default(now())
 }
 
@@ -95,7 +96,19 @@ model PasswordResetToken {
   @@index([userId, createdAt])
 }
 
-// Suscripciones Web Push para avisar de mensajes nuevos con la app cerrada
+// Biblioteca de música: canciones favoritas compartidas (YouTube, sin API key vía oEmbed)
+model Song {
+  id        Int      @id @default(autoincrement())
+  youtubeId String   @unique // 11 caracteres del vídeo
+  title     String
+  artist    String   @default("")
+  thumbnail String   @default("")
+  addedById Int
+  addedBy   User     @relation(fields: [addedById], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
 model PushSubscription {
   id        Int      @id @default(autoincrement())
   endpoint  String   @unique

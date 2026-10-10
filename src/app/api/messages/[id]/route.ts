@@ -36,6 +36,9 @@ export async function PATCH(
   if (!msg) {
     return NextResponse.json({ error: 'Mensaje no encontrado' }, { status: 404 })
   }
+  if (msg.type === 'music') {
+    return NextResponse.json({ error: 'La música no se puede editar' }, { status: 400 })
+  }
   const limit = msg.type === 'text' ? MAX_CONTENT_LENGTH : MAX_CAPTION_LENGTH
   if (!content || content.length > limit) {
     return NextResponse.json({ error: 'Contenido no válido' }, { status: 400 })

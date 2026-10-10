@@ -29,6 +29,7 @@ export function toPayload(m: MessageWithUser): MessagePayload {
     username: m.user.username,
     name: m.user.name,
     replyTo: null,
+    music: null,
     reactions: [],
   }
 }
@@ -51,7 +52,7 @@ export async function withExtras(
   if (payloads.length === 0) return payloads
   const ids = payloads.map((p) => p.id)
 
-  const [reactions, parents] = await Promise.all([
+  const [reactions, parents, songs] = await Promise.all([
     db.reaction.findMany({
       where: { messageId: { in: ids } },
       select: { messageId: true, emoji: true, user: { select: { username: true, name: true } } },
@@ -71,7 +72,17 @@ export async function withExtras(
         },
       },
     }),
+    db.song.findMany({
+      where: {
+        youtubeId: {
+          in: payloads.filter((p) => p.type === 'music').map((p) => p.content),
+        },
+      },
+      select: { youtubeId: true, title: true, artist: true, thumbnail: true },
+    }),
   ])
+
+  const songById = new Map(songs.map((s) => [s.youtubeId, s]))
 
   const parentById = new Map<
     number,
@@ -122,6 +133,15 @@ export async function withExtras(
   return payloads.map((p) => ({
     ...p,
     replyTo: parentById.get(p.id) ?? null,
+    music:
+      p.type === 'music'
+        ? (songById.get(p.content) ?? {
+            youtubeId: p.content,
+            title: 'Vídeo de YouTube',
+            artist: '',
+            thumbnail: `https://i.ytimg.com/vi/${p.content}/hqdefault.jpg`,
+          })
+        : null,
     reactions: reactionsByMessage.get(p.id) ?? [],
   }))
 }

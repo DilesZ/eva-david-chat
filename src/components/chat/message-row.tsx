@@ -4,7 +4,7 @@
 // hora, marcas de enviado/visto (✓ / ✓✓), etiqueta "editado",
 // y acciones de responder/editar/borrar.
 import { useRef, useState } from 'react'
-import { Check, CheckCheck, Pencil, Trash2, Reply, SmilePlus, Copy, X } from 'lucide-react'
+import { Check, CheckCheck, Pencil, Trash2, Reply, SmilePlus, Copy, X, Play } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import {
@@ -49,6 +49,8 @@ export function MessageRow({
   const edited = !!msg.editedAt
   const hasImage = msg.type === 'image' && !!msg.imageUrl
   const hasAudio = msg.type === 'audio' && !!msg.audioUrl
+  const hasMusic = msg.type === 'music' && !!msg.music
+  const [playingMusic, setPlayingMusic] = useState(false)
   const [editing, setEditing] = useState(false)
   const [editText, setEditText] = useState(msg.content)
   const [saving, setSaving] = useState(false)
@@ -207,9 +209,49 @@ export function MessageRow({
                   ? '📷 Foto'
                   : msg.replyTo.type === 'audio'
                     ? '🎙️ Audio'
-                    : msg.replyTo.content}
+                    : msg.replyTo.type === 'music'
+                      ? '🎵 Música'
+                      : msg.replyTo.content}
               </span>
             </button>
+          )}
+          {hasMusic && msg.music && (
+            <div className="w-[220px] sm:w-[260px] max-w-full">
+              {playingMusic ? (
+                <iframe
+                  src={`https://www.youtube-nocookie.com/embed/${msg.music.youtubeId}?autoplay=1&rel=0`}
+                  title={msg.music.title}
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                  className="block w-full aspect-video rounded-xl bg-black"
+                />
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setPlayingMusic(true)}
+                  aria-label={`Reproducir ${msg.music.title}`}
+                  className="relative block w-full group/play"
+                >
+                  <img
+                    src={msg.music.thumbnail}
+                    alt={msg.music.title}
+                    loading="lazy"
+                    className="block w-full aspect-video object-cover rounded-xl"
+                  />
+                  <span className="absolute inset-0 flex items-center justify-center">
+                    <span className="w-12 h-12 rounded-full bg-black/60 group-hover/play:bg-rose-500 flex items-center justify-center transition">
+                      <Play className="w-6 h-6 text-white fill-white ml-0.5" />
+                    </span>
+                  </span>
+                </button>
+              )}
+              <p className="text-[13px] font-semibold leading-snug pt-1.5 px-1 line-clamp-2">
+                {msg.music.title}
+              </p>
+              {msg.music.artist && (
+                <p className="text-[11px] opacity-75 px-1 truncate">{msg.music.artist}</p>
+              )}
+            </div>
           )}
           {hasImage && (
             <img

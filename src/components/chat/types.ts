@@ -32,6 +32,12 @@ export type ChatMessage = {
     content: string
     type: string
   } | null
+  music: {
+    youtubeId: string
+    title: string
+    artist: string
+    thumbnail: string
+  } | null
   reactions: {
     emoji: string
     count: number

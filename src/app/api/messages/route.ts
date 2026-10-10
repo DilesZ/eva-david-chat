@@ -5,6 +5,7 @@ import { db, ensureDb } from '@/lib/db'
 import { getSession } from '@/lib/auth'
 import { broadcastEvent } from '@/lib/broadcast'
 import { notifyPartner } from '@/lib/push'
+import { parseYoutubeId } from '@/lib/songs'
 import { toPayload, withExtras, messageInclude, partnerPresence } from '@/lib/messages'
 
 const MAX_MESSAGES = 500
@@ -164,17 +165,21 @@ export async function POST(req: Request) {
   const content = typeof body.content === 'string' ? body.content.trim() : ''
   const image = typeof body.image === 'string' ? body.image : ''
   const audio = typeof body.audio === 'string' ? body.audio : ''
+  const musicId = parseYoutubeId(typeof body.music === 'string' ? body.music : '')
   const replyToId =
     typeof body.replyToId === 'number' && Number.isInteger(body.replyToId) && body.replyToId > 0
       ? body.replyToId
       : null
 
   // --- Validación según el tipo de mensaje ---
-  if (!image && !audio && !content) {
+  if (!image && !audio && !content && !musicId) {
     return NextResponse.json({ error: 'El mensaje está vacío' }, { status: 400 })
   }
-  if (image && audio) {
-    return NextResponse.json({ error: 'Envía foto o audio, no los dos' }, { status: 400 })
+  if ((image ? 1 : 0) + (audio ? 1 : 0) + (musicId ? 1 : 0) > 1) {
+    return NextResponse.json({ error: 'Envía foto, audio o música (solo uno)' }, { status: 400 })
+  }
+  if (musicId && content) {
+    return NextResponse.json({ error: 'La música no lleva texto' }, { status: 400 })
   }
   if (content.length > (image || audio ? MAX_CAPTION_LENGTH : MAX_CONTENT_LENGTH)) {
     return NextResponse.json({ error: 'El mensaje es demasiado largo' }, { status: 400 })
@@ -219,10 +224,23 @@ export async function POST(req: Request) {
     }
   }
 
-  const kind = audio ? 'audio' : image ? 'image' : 'text'
+  if (musicId) {
+    const inLibrary = await db.song.findUnique({
+      where: { youtubeId: musicId },
+      select: { id: true },
+    })
+    if (!inLibrary) {
+      return NextResponse.json(
+        { error: 'Añade primero la canción a la biblioteca' },
+        { status: 400 },
+      )
+    }
+  }
+
+  const kind = musicId ? 'music' : audio ? 'audio' : image ? 'image' : 'text'
   const created = await db.message.create({
     data: {
-      content,
+      content: musicId ?? content,
       type: kind,
       userId: session.user.id,
       replyToId: replyToId ?? undefined,
@@ -251,7 +269,9 @@ export async function POST(req: Request) {
         ? `📷 ${content || 'Foto'}`
         : created.type === 'audio'
           ? '🎙️ Nota de voz'
-          : content.slice(0, 120)
+          : created.type === 'music'
+            ? `🎵 ${payload.music?.title ?? 'Música'}`
+            : content.slice(0, 120)
     notifyPartner(partner.id, session.user.name, preview).catch(() => {})
   }
 

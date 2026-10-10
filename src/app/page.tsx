@@ -21,6 +21,7 @@ import {
   Film,
   Plus,
   Mic,
+  Music,
 } from 'lucide-react'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { useToast } from '@/hooks/use-toast'
@@ -42,6 +43,7 @@ import { Lightbox } from '@/components/chat/lightbox'
 import { FullEmojiPicker } from '@/components/chat/full-emoji-picker'
 import { PhotoDialog } from '@/components/chat/photo-dialog'
 import { GalleryDialog } from '@/components/chat/gallery-dialog'
+import { MusicDialog } from '@/components/chat/music-dialog'
 import { AudioRecorder, type AudioRecorderHandle } from '@/components/chat/audio-recorder'
 import { GifPicker } from '@/components/chat/gif-picker'
 import { SettingsDialog } from '@/components/chat/settings-dialog'
@@ -109,6 +111,7 @@ export default function HomePage() {
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null)
   const [gifOpen, setGifOpen] = useState(false)
   const [attachOpen, setAttachOpen] = useState(false)
+  const [musicOpen, setMusicOpen] = useState(false)
   const [avatars, setAvatars] = useState<Record<string, string | null>>({})
   const isMobile = useIsMobile()
   const audioRef = useRef<AudioRecorderHandle | null>(null)
@@ -685,6 +688,40 @@ export default function HomePage() {
     }
   }
 
+  // ---- música: compartir en el chat ----
+
+  async function handleShareSong(youtubeId: string, title: string) {
+    try {
+      const res = await fetch('/api/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: '', music: youtubeId }),
+      })
+      if (res.status === 401) {
+        toast({ title: 'Tu sesión ha caducado', description: 'Vuelve a iniciar sesión.' })
+        clearSessionState()
+        return
+      }
+      const data = await res.json().catch(() => null)
+      if (!res.ok || !data?.message) {
+        toast({
+          title: 'No se pudo compartir',
+          description: data?.error ?? 'Inténtalo de nuevo.',
+        })
+        return
+      }
+      if (isValidMessage(data.message)) {
+        setMessages((prev) =>
+          prev.some((m) => m.id === data.message.id) ? prev : [...prev, data.message],
+        )
+      }
+      setMusicOpen(false)
+      toast({ title: 'Compartida en el chat', description: title })
+    } catch {
+      toast({ title: 'No se pudo compartir', description: 'Comprueba tu conexión.' })
+    }
+  }
+
   // ---- fotos ----
 
   async function handlePhotoFile(file: File | null | undefined) {
@@ -884,7 +921,9 @@ export default function HomePage() {
         own={msg.username === me.username}
         avatarImg={avatars[msg.username] ?? null}
         onImageClick={setLightboxUrl}
-        onEdit={msg.username === me.username ? handleEditMessage : undefined}
+        onEdit={
+          msg.username === me.username && msg.type !== 'music' ? handleEditMessage : undefined
+        }
         onDelete={msg.username === me.username ? handleDeleteMessage : undefined}
         onReply={(m) => {
           setReplyTo(m)
@@ -1003,7 +1042,9 @@ export default function HomePage() {
                                 ? '📷 Foto'
                                 : r.type === 'audio'
                                   ? '🎙️ Audio'
-                                  : r.content}
+                                  : r.type === 'music'
+                                    ? `🎵 ${r.music?.title ?? 'Música'}`
+                                    : r.content}
                             </span>
                             <span className="block text-[11px] text-stone-400">
                               {r.name} · {formatTime(new Date(r.createdAt))}
@@ -1025,6 +1066,16 @@ export default function HomePage() {
               className="text-stone-400 hover:text-rose-500 hover:bg-rose-50 rounded-full"
             >
               <Images className="w-5 h-5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setMusicOpen(true)}
+              aria-label="Nuestra música"
+              title="Nuestra música"
+              className="text-stone-400 hover:text-rose-500 hover:bg-rose-50 rounded-full"
+            >
+              <Music className="w-5 h-5" />
             </Button>
             <Button
               variant="ghost"
@@ -1107,7 +1158,9 @@ export default function HomePage() {
                   ? '📷 Foto'
                   : replyTo.type === 'audio'
                     ? '🎙️ Audio'
-                    : replyTo.content}
+                    : replyTo.type === 'music'
+                      ? `🎵 ${replyTo.music?.title ?? 'Música'}`
+                      : replyTo.content}
               </p>
             </div>
             <button
@@ -1335,6 +1388,10 @@ export default function HomePage() {
             setLightboxUrl(url)
           }}
         />
+      )}
+
+      {musicOpen && (
+        <MusicDialog open onClose={() => setMusicOpen(false)} onShare={handleShareSong} />
       )}
     </div>
   )
