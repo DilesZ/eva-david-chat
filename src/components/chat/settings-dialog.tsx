@@ -14,8 +14,9 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { Badge } from '@/components/ui/badge'
-import { Loader2, Mail, KeyRound, ShieldCheck, Info } from 'lucide-react'
+import { Loader2, Mail, KeyRound, ShieldCheck, Info, BellRing } from 'lucide-react'
 import type { SessionUser } from './types'
+import { PushToggle } from './push-toggle'
 
 type Phase = 'idle' | 'code-sent' | 'done'
 
@@ -174,6 +175,17 @@ export function SettingsDialog({
           <p className="text-xs text-stone-400">
             Necesario para enviarte el código de verificación cuando cambies tu contraseña.
           </p>
+        </section>
+
+        <Separator className="bg-rose-100" />
+
+        {/* ---- avisos push ---- */}
+        <section className="space-y-2">
+          <h3 className="flex items-center gap-1.5 text-sm font-semibold text-stone-700">
+            <BellRing className="w-4 h-4 text-rose-400" />
+            Notificaciones
+          </h3>
+          <PushToggle />
         </section>
 
         <Separator className="bg-rose-100" />

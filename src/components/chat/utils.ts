@@ -56,6 +56,18 @@ export function formatTime(d: Date): string {
   return new Intl.DateTimeFormat('es-ES', { hour: '2-digit', minute: '2-digit' }).format(d)
 }
 
+// "últ. vez hoy 14:32" / "últ. vez ayer 09:10" / "últ. vez 3 de octubre"
+export function formatLastSeen(d: Date): string {
+  if (Number.isNaN(d.getTime())) return 'Desconectado'
+  const now = new Date()
+  const startOf = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime()
+  const dayDiff = Math.round((startOf(now) - startOf(d)) / 86_400_000)
+  if (dayDiff <= 0) return `últ. vez hoy ${formatTime(d)}`
+  if (dayDiff === 1) return `últ. vez ayer ${formatTime(d)}`
+  const s = new Intl.DateTimeFormat('es-ES', { day: 'numeric', month: 'long' }).format(d)
+  return `últ. vez ${s}`
+}
+
 // valida la forma de un mensaje antes de pintarlo (protección frente a datos corruptos)
 export function isValidMessage(m: unknown): m is ChatMessage {
   const msg = m as ChatMessage | null

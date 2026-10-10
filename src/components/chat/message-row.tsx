@@ -47,7 +47,6 @@ export function MessageRow({
   const edited = !!msg.editedAt
   const hasImage = msg.type === 'image' && !!msg.imageUrl
   const hasAudio = msg.type === 'audio' && !!msg.audioUrl
-  const canEdit = msg.type === 'text' || msg.type === 'audio'
   const [editing, setEditing] = useState(false)
   const [editText, setEditText] = useState(msg.content)
   const [saving, setSaving] = useState(false)
@@ -249,7 +248,7 @@ export function MessageRow({
           )}
           {own && !editing && (onEdit || onDelete) && (
             <span className="flex items-center gap-0.5 ml-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-              {canEdit && onEdit && (
+              {onEdit && (
                 <button
                   type="button"
                   aria-label="Editar mensaje"

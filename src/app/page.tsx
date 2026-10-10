@@ -26,6 +26,7 @@ import {
   BASE_TITLE,
   dayKey,
   formatDayLabel,
+  formatLastSeen,
   formatTime,
   isValidMessage,
   styleFor,
@@ -84,6 +85,7 @@ export default function HomePage() {
   // ---- presencia / escritura ----
   const [otherOnline, setOtherOnline] = useState(false)
   const [otherTyping, setOtherTyping] = useState(false)
+  const [partnerLastSeen, setPartnerLastSeen] = useState<string | null>(null)
 
   // ---- extras ----
   const [documentVisible, setDocumentVisible] = useState(true)
@@ -128,6 +130,7 @@ export default function HomePage() {
     setSocketConnected(false)
     setOtherOnline(false)
     setOtherTyping(false)
+    setPartnerLastSeen(null)
     setHasUnread(false)
     setSettingsOpen(false)
     setEmojiOpen(false)
@@ -151,6 +154,7 @@ export default function HomePage() {
             setMe(data.user)
             setToken(data.token)
             setPartner(data.partner ?? null)
+            setPartnerLastSeen(data.partner?.lastSeenAt ?? null)
           }
         }
       } catch {
@@ -292,8 +296,10 @@ export default function HomePage() {
         const data = await res.json()
         lastPollRef.current = new Date().toISOString()
         if (data.partner) {
-          setOtherOnline(!!data.partner.online)
+          const online = !!data.partner.online
+          setOtherOnline(online)
           setOtherTyping(!!data.partner.typing)
+          if (online) setPartnerLastSeen(new Date().toISOString())
         }
         const fresh: ChatMessage[] = (data.messages ?? []).filter(isValidMessage)
         const edited: ChatMessage[] = (data.edited ?? []).filter(isValidMessage)
@@ -425,6 +431,7 @@ export default function HomePage() {
       setMe(data.user)
       setToken(data.token)
       setPartner(data.partner ?? null)
+      setPartnerLastSeen(data.partner?.lastSeenAt ?? null)
     } catch {
       setLoginError('Error de conexión, inténtalo de nuevo')
     } finally {
@@ -829,11 +836,14 @@ export default function HomePage() {
 
   const partnerStyle = styleFor(partner?.username ?? '')
   const partnerName = partner?.name ?? 'Chat'
+  const lastSeenDate = partnerLastSeen ? new Date(partnerLastSeen) : null
   const statusText = otherTyping
     ? 'Escribiendo…'
     : otherOnline
       ? 'En línea'
-      : 'Desconectado'
+      : lastSeenDate && !Number.isNaN(lastSeenDate.getTime())
+        ? formatLastSeen(lastSeenDate)
+        : 'Desconectado'
 
   const rows: ReactNode[] = []
   let lastDay: number | null = null

@@ -21,6 +21,7 @@ model User {
   sessions    Session[]
   resetTokens PasswordResetToken[]
   reactions   Reaction[]
+  pushSubscriptions PushSubscription[]
   createdAt   DateTime             @default(now())
 }
 
@@ -90,4 +91,17 @@ model PasswordResetToken {
   createdAt DateTime  @default(now())
 
   @@index([userId, createdAt])
+}
+
+// Suscripciones Web Push para avisar de mensajes nuevos con la app cerrada
+model PushSubscription {
+  id        Int      @id @default(autoincrement())
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }

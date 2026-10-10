@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server'
 import { db, ensureDb } from '@/lib/db'
 import { getSession } from '@/lib/auth'
 import { broadcastEvent } from '@/lib/broadcast'
+import { notifyPartner } from '@/lib/push'
 import { toPayload, withExtras, messageInclude, partnerPresence } from '@/lib/messages'
 
 const MAX_MESSAGES = 500
@@ -215,6 +216,20 @@ export async function POST(req: Request) {
   } catch (err) {
     // El mensaje ya está guardado; si falla la difusión el otro usuario lo verá al recargar
     console.error('[messages] no se pudo difundir por websocket:', err)
+  }
+
+  // Aviso push al otro usuario (no bloquea la respuesta si falla)
+  const partner = await db.user
+    .findFirst({ where: { id: { not: session.user.id } }, select: { id: true } })
+    .catch(() => null)
+  if (partner) {
+    const preview =
+      created.type === 'image'
+        ? `📷 ${content || 'Foto'}`
+        : created.type === 'audio'
+          ? '🎙️ Nota de voz'
+          : content.slice(0, 120)
+    notifyPartner(partner.id, session.user.name, preview).catch(() => {})
   }
 
   return NextResponse.json({ message: payload })

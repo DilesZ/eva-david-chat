@@ -23,6 +23,43 @@ self.addEventListener('activate', (event) => {
   )
 })
 
+self.addEventListener('push', (event) => {
+  let title = 'Eva ♥ David'
+  let body = 'Tienes un mensaje nuevo'
+  let url = '/'
+  try {
+    const data = event.data ? event.data.json() : null
+    if (data?.title) title = String(data.title)
+    if (data?.body) body = String(data.body)
+    if (data?.url) url = String(data.url)
+  } catch {
+    // payload no JSON: se usa el texto por defecto
+  }
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body,
+      icon: '/icons/icon-192.png',
+      badge: '/icons/icon-192.png',
+      data: { url },
+      tag: 'eva-david-chat',
+      renotify: true,
+    }),
+  )
+})
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+  const url = (event.notification.data && event.notification.data.url) || '/'
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windows) => {
+      for (const w of windows) {
+        if ('focus' in w) return w.focus()
+      }
+      return self.clients.openWindow(url)
+    }),
+  )
+})
+
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url)
   if (event.request.method !== 'GET' || url.origin !== self.location.origin) return

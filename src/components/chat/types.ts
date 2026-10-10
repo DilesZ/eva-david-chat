@@ -9,6 +9,7 @@ export type SessionUser = {
 export type Partner = {
   username: string
   name: string
+  lastSeenAt?: string | null
 }
 
 export type ChatMessage = {
