@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
-import { db } from '@/lib/db'
+import { db, ensureDb } from '@/lib/db'
 
 // POST /api/setup — crea los usuarios iniciales SOLO si la BD está vacía.
 // Necesario en Vercel: el SQLite de /tmp nace vacío en cada despliegue y no hay
 // forma de ejecutar scripts contra él. Una vez con usuarios, responde 409 y no hace nada.
 export async function POST() {
+  await ensureDb()
   const count = await db.user.count()
   if (count > 0) {
     return NextResponse.json({ ok: false, reason: 'already-seeded' }, { status: 409 })

@@ -2,7 +2,7 @@
 // y cambia la contraseña del usuario conectado (cierra sus otras sesiones)
 import { NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
-import { db } from '@/lib/db'
+import { db, ensureDb } from '@/lib/db'
 import { getSession } from '@/lib/auth'
 import { verifyAndConsumeCode } from '@/lib/verification'
 
@@ -10,6 +10,7 @@ const MIN_PASSWORD = 6
 const MAX_PASSWORD = 100
 
 export async function POST(req: Request) {
+  await ensureDb()
   const session = await getSession()
   if (!session) {
     return NextResponse.json({ error: 'No autenticado' }, { status: 401 })

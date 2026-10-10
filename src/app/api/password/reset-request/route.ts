@@ -2,11 +2,12 @@
 // Envía un código de verificación al correo guardado de ese usuario.
 // Requiere SMTP configurado (no hay modo de prueba aquí por seguridad).
 import { NextResponse } from 'next/server'
-import { db } from '@/lib/db'
+import { db, ensureDb } from '@/lib/db'
 import { createVerificationCode } from '@/lib/verification'
 import { isEmailConfigured, sendVerificationCode, maskEmail } from '@/lib/email'
 
 export async function POST(req: Request) {
+  await ensureDb()
   const body = await req.json().catch(() => null)
   const username = typeof body?.username === 'string' ? body.username.trim().toLowerCase() : ''
 

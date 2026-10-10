@@ -1,12 +1,13 @@
 // GET /api/images/[id] — sirve la foto de un mensaje (protegido por sesión)
 import { NextResponse } from 'next/server'
-import { db } from '@/lib/db'
+import { db, ensureDb } from '@/lib/db'
 import { getSession } from '@/lib/auth'
 
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  await ensureDb()
   const session = await getSession()
   if (!session) {
     return NextResponse.json({ error: 'No autenticado' }, { status: 401 })

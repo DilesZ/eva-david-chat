@@ -1,7 +1,7 @@
 // GET  /api/messages — historial (últimos 500 mensajes en orden ascendente)
 // POST /api/messages — guarda un mensaje nuevo (texto o foto) y lo difunde por websocket
 import { NextResponse } from 'next/server'
-import { db } from '@/lib/db'
+import { db, ensureDb } from '@/lib/db'
 import { getSession } from '@/lib/auth'
 import { broadcastEvent } from '@/lib/broadcast'
 
@@ -45,6 +45,7 @@ function toPayload(m: {
 const messageInclude = { user: { select: { username: true, name: true } } } as const
 
 export async function GET() {
+  await ensureDb()
   const session = await getSession()
   if (!session) {
     return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
@@ -60,6 +61,7 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  await ensureDb()
   const session = await getSession()
   if (!session) {
     return NextResponse.json({ error: 'No autenticado' }, { status: 401 })

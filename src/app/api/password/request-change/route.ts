@@ -1,12 +1,13 @@
 // POST /api/password/request-change — envía un código de verificación al correo
 // del usuario conectado para permitirle cambiar su contraseña
 import { NextResponse } from 'next/server'
-import { db } from '@/lib/db'
+import { db, ensureDb } from '@/lib/db'
 import { getSession } from '@/lib/auth'
 import { createVerificationCode } from '@/lib/verification'
 import { isEmailConfigured, isDevFallbackEnabled, sendVerificationCode, maskEmail } from '@/lib/email'
 
 export async function POST() {
+  await ensureDb()
   const session = await getSession()
   if (!session) {
     return NextResponse.json({ error: 'No autenticado' }, { status: 401 })

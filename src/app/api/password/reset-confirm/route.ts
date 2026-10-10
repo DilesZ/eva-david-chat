@@ -3,13 +3,14 @@
 // Cierra TODAS las sesiones del usuario (se volverá a identificar en todos sus dispositivos).
 import { NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
-import { db } from '@/lib/db'
+import { db, ensureDb } from '@/lib/db'
 import { verifyAndConsumeCode } from '@/lib/verification'
 
 const MIN_PASSWORD = 6
 const MAX_PASSWORD = 100
 
 export async function POST(req: Request) {
+  await ensureDb()
   const body = await req.json().catch(() => null)
   const username = typeof body?.username === 'string' ? body.username.trim().toLowerCase() : ''
   const code = typeof body?.code === 'string' ? body.code.trim() : ''

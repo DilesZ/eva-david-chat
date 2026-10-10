@@ -1,10 +1,11 @@
 // POST /api/login — valida usuario y contraseña, crea sesión
 import { NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
-import { db } from '@/lib/db'
+import { db, ensureDb } from '@/lib/db'
 import { createSession, SESSION_COOKIE, sessionCookieOptions } from '@/lib/auth'
 
 export async function POST(req: Request) {
+  await ensureDb()
   try {
     const body = await req.json().catch(() => null)
     const username = typeof body?.username === 'string' ? body.username.trim().toLowerCase() : ''

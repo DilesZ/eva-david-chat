@@ -1,13 +1,14 @@
 // POST /api/profile/email — guarda el correo electrónico del usuario conectado
 // (necesario para poder verificar el cambio de contraseña por correo)
 import { NextResponse } from 'next/server'
-import { db } from '@/lib/db'
+import { db, ensureDb } from '@/lib/db'
 import { getSession } from '@/lib/auth'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
 const MAX_EMAIL = 254
 
 export async function POST(req: Request) {
+  await ensureDb()
   const session = await getSession()
   if (!session) {
     return NextResponse.json({ error: 'No autenticado' }, { status: 401 })

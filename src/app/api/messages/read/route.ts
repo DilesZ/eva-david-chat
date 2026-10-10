@@ -1,11 +1,12 @@
 // POST /api/messages/read — marca como leídos los mensajes de la otra persona
 // hasta `lastMessageId` y difunde el evento para las marcas "visto" (✓✓)
 import { NextResponse } from 'next/server'
-import { db } from '@/lib/db'
+import { db, ensureDb } from '@/lib/db'
 import { getSession } from '@/lib/auth'
 import { broadcastEvent } from '@/lib/broadcast'
 
 export async function POST(req: Request) {
+  await ensureDb()
   const session = await getSession()
   if (!session) {
     return NextResponse.json({ error: 'No autenticado' }, { status: 401 })

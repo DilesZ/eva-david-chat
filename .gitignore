@@ -59,3 +59,5 @@ db/*.db-journal
 *.pid
 .zscripts/*.pid
 mini-services/*/service.pid
+.vercel
+.env*
