@@ -11,6 +11,7 @@ export type SessionUserInfo = {
   username: string
   name: string
   email: string | null
+  avatar: string | null
 }
 
 type ValidSession = {
@@ -43,7 +44,7 @@ export async function getSession(): Promise<ValidSession | null> {
 
   const session = await db.session.findUnique({
     where: { token },
-    include: { user: { select: { id: true, username: true, name: true, email: true } } },
+    include: { user: { select: { id: true, username: true, name: true, email: true, avatar: true } } },
   })
   if (!session) return null
 
@@ -60,6 +61,7 @@ export async function getSession(): Promise<ValidSession | null> {
       username: session.user.username,
       name: session.user.name,
       email: session.user.email,
+      avatar: session.user.avatar,
     },
   }
 }

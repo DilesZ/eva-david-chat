@@ -24,6 +24,7 @@ import { FullEmojiPicker } from './full-emoji-picker'
 export function MessageRow({
   msg,
   own,
+  avatarImg,
   onImageClick,
   onEdit,
   onDelete,
@@ -34,6 +35,7 @@ export function MessageRow({
 }: {
   msg: ChatMessage
   own: boolean
+  avatarImg?: string | null
   onImageClick: (url: string) => void
   onEdit?: (id: number, content: string) => Promise<boolean>
   onDelete?: (id: number) => void
@@ -88,10 +90,14 @@ export function MessageRow({
         />
       )}
       <div
-        className={`w-8 h-8 shrink-0 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-sm ${style.avatar}`}
+        className={`w-8 h-8 shrink-0 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-sm overflow-hidden ${style.avatar}`}
         aria-hidden="true"
       >
-        {msg.name.charAt(0).toUpperCase()}
+        {avatarImg ? (
+          <img src={avatarImg} alt="" className="w-full h-full object-cover" />
+        ) : (
+          msg.name.charAt(0).toUpperCase()
+        )}
       </div>
       <div
         className={`flex flex-col max-w-[75%] sm:max-w-[70%] ${own ? 'items-end' : 'items-start'}`}

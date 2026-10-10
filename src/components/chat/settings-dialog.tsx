@@ -1,7 +1,7 @@
 'use client'
 
 // Diálogo de ajustes: correo electrónico y cambio de contraseña verificado por código
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -14,21 +14,80 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { Badge } from '@/components/ui/badge'
-import { Loader2, Mail, KeyRound, ShieldCheck, Info, BellRing } from 'lucide-react'
+import { Loader2, Mail, KeyRound, ShieldCheck, Info, BellRing, Camera } from 'lucide-react'
 import type { SessionUser } from './types'
 import { PushToggle } from './push-toggle'
+import { compressAvatar } from './utils'
 
 type Phase = 'idle' | 'code-sent' | 'done'
 
 export function SettingsDialog({
   me,
   onEmailSaved,
+  onAvatarSaved,
   onClose,
 }: {
   me: SessionUser
   onEmailSaved: (email: string) => void
+  onAvatarSaved: (avatar: string | null) => void
   onClose: () => void
 }) {
+  // ---- foto de perfil ----
+  const [savingAvatar, setSavingAvatar] = useState(false)
+  const [processingAvatar, setProcessingAvatar] = useState(false)
+  const avatarInputRef = useRef<HTMLInputElement | null>(null)
+
+  async function handleAvatarFile(file: File | null | undefined) {
+    if (!file || savingAvatar) return
+    setProcessingAvatar(true)
+    setError('')
+    try {
+      const dataUrl = await compressAvatar(file)
+      setSavingAvatar(true)
+      const res = await fetch('/api/profile/avatar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: dataUrl }),
+      })
+      const data = await res.json().catch(() => null)
+      if (!res.ok) {
+        setError(data?.error ?? 'No se pudo guardar la foto')
+        return
+      }
+      onAvatarSaved(data.avatar ?? null)
+      setSuccess('Foto de perfil actualizada.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo preparar la foto')
+    } finally {
+      setProcessingAvatar(false)
+      setSavingAvatar(false)
+      if (avatarInputRef.current) avatarInputRef.current.value = ''
+    }
+  }
+
+  async function handleRemoveAvatar() {
+    if (savingAvatar) return
+    setSavingAvatar(true)
+    setError('')
+    try {
+      const res = await fetch('/api/profile/avatar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: null }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => null)
+        setError(data?.error ?? 'No se pudo quitar la foto')
+        return
+      }
+      onAvatarSaved(null)
+      setSuccess('Foto de perfil eliminada.')
+    } catch {
+      setError('Error de conexión, inténtalo de nuevo')
+    } finally {
+      setSavingAvatar(false)
+    }
+  }
   // ---- correo ----
   const [email, setEmail] = useState(me.email ?? '')
   const [savingEmail, setSavingEmail] = useState(false)
@@ -146,6 +205,59 @@ export function SettingsDialog({
           </p>
         )}
         {success && <p className="text-sm text-emerald-600">{success}</p>}
+
+        {/* ---- foto de perfil ---- */}
+        <section className="space-y-2">
+          <div className="flex items-center gap-3">
+            <div className="w-14 h-14 shrink-0 rounded-full overflow-hidden bg-gradient-to-br from-rose-400 to-pink-500 flex items-center justify-center text-white text-xl font-bold shadow">
+              {me.avatar ? (
+                <img src={me.avatar} alt="Tu foto de perfil" className="w-full h-full object-cover" />
+              ) : (
+                me.name.charAt(0).toUpperCase()
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-stone-700">Tu foto de perfil</p>
+              <p className="text-xs text-stone-400">Se ve junto a tus mensajes.</p>
+            </div>
+          </div>
+          <input
+            ref={avatarInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/gif"
+            className="hidden"
+            onChange={(e) => handleAvatarFile(e.target.files?.[0])}
+          />
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={processingAvatar || savingAvatar}
+              onClick={() => avatarInputRef.current?.click()}
+              className="h-9 rounded-full border-rose-200 text-stone-600 text-xs"
+            >
+              {processingAvatar || savingAvatar ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Camera className="w-4 h-4" />
+              )}
+              Cambiar foto
+            </Button>
+            {me.avatar && (
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={processingAvatar || savingAvatar}
+                onClick={handleRemoveAvatar}
+                className="h-9 rounded-full text-xs text-stone-400 hover:text-red-500"
+              >
+                Quitar
+              </Button>
+            )}
+          </div>
+        </section>
+
+        <Separator className="bg-rose-100" />
 
         {/* ---- correo electrónico ---- */}
         <section className="space-y-2">

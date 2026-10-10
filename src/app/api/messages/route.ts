@@ -41,7 +41,7 @@ export async function GET(req: Request) {
 
   const partner = await db.user.findFirst({
     where: { id: { not: session.user.id } },
-    select: { id: true },
+    select: { id: true, username: true },
   })
   const presence = partner ? await partnerPresence(partner.id) : { online: false, typing: false }
 
@@ -51,12 +51,19 @@ export async function GET(req: Request) {
 
   // Carga inicial: últimos 500 no borrados (con citas y reacciones)
   if (!validSince) {
-    const messages = await db.message.findMany({
-      where: { deletedAt: null },
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      take: MAX_MESSAGES,
-      include: messageInclude,
-    })
+    const [messages, users] = await Promise.all([
+      db.message.findMany({
+        where: { deletedAt: null },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: MAX_MESSAGES,
+        include: messageInclude,
+      }),
+      db.user.findMany({
+        select: { username: true, avatar: true },
+      }),
+    ])
+    const avatars: Record<string, string | null> = {}
+    for (const u of users) avatars[u.username] = u.avatar
     const payloads = await withExtras(
       messages.reverse().map(toPayload),
       session.user.username,
@@ -67,6 +74,7 @@ export async function GET(req: Request) {
       deletedIds: [],
       readIds: [],
       reactionSync: [],
+      avatars,
       partner: presence,
     })
   }
@@ -107,6 +115,18 @@ export async function GET(req: Request) {
   const editedIds = new Set(edited.map((m) => m.id))
   const onlyTouched = touched.filter((m) => !freshIds.has(m.id) && !editedIds.has(m.id))
 
+  // Avatar del otro solo cuando cambia (para no reenviar ~30 KB en cada poll)
+  let avatarChanged: string | null | undefined
+  if (partner) {
+    const row = await db.user.findUnique({
+      where: { id: partner.id },
+      select: { avatar: true, avatarUpdatedAt: true },
+    })
+    if (row?.avatarUpdatedAt && row.avatarUpdatedAt > validSince) {
+      avatarChanged = row.avatar
+    }
+  }
+
   return NextResponse.json({
     messages: await withExtras(
       fresh.map(toPayload),
@@ -122,6 +142,9 @@ export async function GET(req: Request) {
       onlyTouched.map(toPayload),
       session.user.username,
     ),
+    ...(avatarChanged !== undefined && partner
+      ? { avatars: { [partner.username]: avatarChanged } }
+      : {}),
     partner: presence,
   })
 }

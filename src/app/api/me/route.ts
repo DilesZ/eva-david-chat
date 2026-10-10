@@ -13,7 +13,7 @@ export async function GET() {
 
   const partner = await db.user.findFirst({
     where: { id: { not: session.user.id } },
-    select: { username: true, name: true, lastSeenAt: true },
+    select: { username: true, name: true, lastSeenAt: true, avatar: true },
   })
 
   return NextResponse.json({
@@ -24,6 +24,7 @@ export async function GET() {
           username: partner.username,
           name: partner.name,
           lastSeenAt: partner.lastSeenAt ? partner.lastSeenAt.toISOString() : null,
+          avatar: partner.avatar,
         }
       : null,
   })

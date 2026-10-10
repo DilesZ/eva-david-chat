@@ -30,13 +30,26 @@ export async function POST(req: Request) {
 
     const partner = await db.user.findFirst({
       where: { id: { not: user.id } },
-      select: { username: true, name: true },
+      select: { username: true, name: true, lastSeenAt: true, avatar: true },
     })
 
     const res = NextResponse.json({
-      user: { id: user.id, username: user.username, name: user.name, email: user.email },
+      user: {
+        id: user.id,
+        username: user.username,
+        name: user.name,
+        email: user.email,
+        avatar: user.avatar,
+      },
       token,
-      partner: partner ?? null,
+      partner: partner
+        ? {
+            username: partner.username,
+            name: partner.name,
+            lastSeenAt: partner.lastSeenAt ? partner.lastSeenAt.toISOString() : null,
+            avatar: partner.avatar,
+          }
+        : null,
     })
     res.cookies.set(SESSION_COOKIE, token, sessionCookieOptions(60 * 60 * 24 * 30))
     return res

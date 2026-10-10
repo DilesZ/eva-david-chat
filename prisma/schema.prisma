@@ -15,6 +15,8 @@ model User {
   password    String
   name        String
   email       String?
+  avatar      String? // foto de perfil (dataURL pequeña, 256px)
+  avatarUpdatedAt DateTime? // para sincronizarla por polling solo al cambiar
   lastSeenAt  DateTime? // último poll: presencia "En línea"
   typingAt    DateTime? // último aviso de "escribiendo"
   messages    Message[]

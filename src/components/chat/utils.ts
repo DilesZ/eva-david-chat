@@ -153,6 +153,31 @@ export async function compressImage(file: File): Promise<string> {
   }
 }
 
+// Foto de perfil: cuadrada de 256px en JPEG (~20-40 KB) para guardar en la BD
+export async function compressAvatar(file: File): Promise<string> {
+  if (!file.type.startsWith('image/')) {
+    throw new Error('Elige una imagen (JPG, PNG, WebP o GIF)')
+  }
+  if (file.size > 10 * 1024 * 1024) {
+    throw new Error('La foto es demasiado grande (máximo 10 MB)')
+  }
+  const bitmap = await createImageBitmap(file)
+  try {
+    const side = Math.min(bitmap.width, bitmap.height)
+    const sx = Math.floor((bitmap.width - side) / 2)
+    const sy = Math.floor((bitmap.height - side) / 2)
+    const canvas = document.createElement('canvas')
+    canvas.width = 256
+    canvas.height = 256
+    const ctx = canvas.getContext('2d')
+    if (!ctx) throw new Error('Canvas no disponible')
+    ctx.drawImage(bitmap, sx, sy, side, side, 0, 0, 256, 256)
+    return canvas.toDataURL('image/jpeg', 0.82)
+  } finally {
+    bitmap.close()
+  }
+}
+
 // ---- aviso sonoro suave (sin archivos externos) ----
 
 export function playPing(): void {

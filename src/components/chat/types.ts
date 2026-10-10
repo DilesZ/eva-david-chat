@@ -4,12 +4,14 @@ export type SessionUser = {
   username: string
   name: string
   email: string | null
+  avatar: string | null
 }
 
 export type Partner = {
   username: string
   name: string
   lastSeenAt?: string | null
+  avatar?: string | null
 }
 
 export type ChatMessage = {

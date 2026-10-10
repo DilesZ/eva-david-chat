@@ -105,6 +105,7 @@ export default function HomePage() {
   const [highlightId, setHighlightId] = useState<number | null>(null)
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null)
   const [gifOpen, setGifOpen] = useState(false)
+  const [avatars, setAvatars] = useState<Record<string, string | null>>({})
 
   const socketRef = useRef<Socket | null>(null)
   const bottomRef = useRef<HTMLDivElement | null>(null)
@@ -155,6 +156,11 @@ export default function HomePage() {
             setToken(data.token)
             setPartner(data.partner ?? null)
             setPartnerLastSeen(data.partner?.lastSeenAt ?? null)
+            setAvatars((prev) => ({
+              ...prev,
+              ...(data.user ? { [data.user.username]: data.user.avatar ?? null } : {}),
+              ...(data.partner ? { [data.partner.username]: data.partner.avatar ?? null } : {}),
+            }))
           }
         }
       } catch {
@@ -189,6 +195,9 @@ export default function HomePage() {
             const valid: ChatMessage[] = (data.messages ?? []).filter(isValidMessage)
             setMessages(valid)
             lastPollRef.current = new Date().toISOString()
+            if (data.avatars && typeof data.avatars === 'object') {
+              setAvatars((prev) => ({ ...prev, ...(data.avatars as Record<string, string | null>) }))
+            }
             if (data.partner) {
               setOtherOnline(!!data.partner.online)
               setOtherTyping(!!data.partner.typing)
@@ -300,6 +309,9 @@ export default function HomePage() {
           setOtherOnline(online)
           setOtherTyping(!!data.partner.typing)
           if (online) setPartnerLastSeen(new Date().toISOString())
+        }
+        if (data.avatars && typeof data.avatars === 'object') {
+          setAvatars((prev) => ({ ...prev, ...(data.avatars as Record<string, string | null>) }))
         }
         const fresh: ChatMessage[] = (data.messages ?? []).filter(isValidMessage)
         const edited: ChatMessage[] = (data.edited ?? []).filter(isValidMessage)
@@ -432,6 +444,10 @@ export default function HomePage() {
       setToken(data.token)
       setPartner(data.partner ?? null)
       setPartnerLastSeen(data.partner?.lastSeenAt ?? null)
+      setAvatars({
+        ...(data.user ? { [data.user.username]: data.user.avatar ?? null } : {}),
+        ...(data.partner ? { [data.partner.username]: data.partner.avatar ?? null } : {}),
+      })
     } catch {
       setLoginError('Error de conexión, inténtalo de nuevo')
     } finally {
@@ -859,6 +875,7 @@ export default function HomePage() {
         key={msg.id}
         msg={msg}
         own={msg.username === me.username}
+        avatarImg={avatars[msg.username] ?? null}
         onImageClick={setLightboxUrl}
         onEdit={msg.username === me.username ? handleEditMessage : undefined}
         onDelete={msg.username === me.username ? handleDeleteMessage : undefined}
@@ -880,10 +897,18 @@ export default function HomePage() {
           <div className="flex items-center gap-3 min-w-0">
             <div className="relative shrink-0">
               <div
-                className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shadow ${partnerStyle.avatar}`}
+                className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shadow overflow-hidden ${partnerStyle.avatar}`}
                 aria-hidden="true"
               >
-                {partnerName.charAt(0).toUpperCase()}
+                {partner?.username && avatars[partner.username] ? (
+                  <img
+                    src={avatars[partner.username] as string}
+                    alt=""
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  partnerName.charAt(0).toUpperCase()
+                )}
               </div>
               {otherOnline && (
                 <span
@@ -1205,6 +1230,10 @@ export default function HomePage() {
         <SettingsDialog
           me={me}
           onEmailSaved={(email) => setMe({ ...me, email })}
+          onAvatarSaved={(avatar) => {
+            setMe({ ...me, avatar })
+            setAvatars((prev) => ({ ...prev, [me.username]: avatar }))
+          }}
           onClose={() => setSettingsOpen(false)}
         />
       )}
