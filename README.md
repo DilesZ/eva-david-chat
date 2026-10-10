@@ -1,8 +1,10 @@
 # Eva ♥ David — Chat privado
 
-Next.js 16 + Tailwind + shadcn + Prisma (SQLite) + Socket.IO.
+Next.js 16 + Tailwind + shadcn + Prisma (Postgres en Neon) + Socket.IO.
 
-> ⚠️ **Nota Vercel (SQLite tal cual):** Vercel tiene filesystem efímero y no soporta el mini-servicio de websockets (`mini-services/chat-service` en puertos 3003/3004) ni Caddy. Esta rama despliega para demo: el login/historial funciona, pero **los mensajes se pierden en cada redeploy** y el tiempo real por socket no funciona (solo al enviar/recargar). Para producción persistente, migrar a Postgres (Neon/Supabase) + Pusher/Ably.
+> Estado: datos compartidos y persistentes en Postgres (Neon vía Vercel Storage).
+> El tiempo real por websockets (`mini-services/chat-service`, puertos 3003/3004) solo
+> funciona en local/VPS; en Vercel los mensajes se envían y leen por la API.
 
 ## Despliegue en Vercel (GitHub → Vercel)
 
