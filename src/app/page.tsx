@@ -44,6 +44,7 @@ import { Lightbox } from '@/components/chat/lightbox'
 import { FullEmojiPicker } from '@/components/chat/full-emoji-picker'
 import { PhotoDialog } from '@/components/chat/photo-dialog'
 import { GalleryDialog } from '@/components/chat/gallery-dialog'
+import { PartnerProfile } from '@/components/chat/partner-profile'
 import { MusicDialog } from '@/components/chat/music-dialog'
 import { StickerPicker } from '@/components/chat/sticker-picker'
 import { AudioRecorder, type AudioRecorderHandle } from '@/components/chat/audio-recorder'
@@ -115,6 +116,7 @@ export default function HomePage() {
   const [attachOpen, setAttachOpen] = useState(false)
   const [musicOpen, setMusicOpen] = useState(false)
   const [stickerOpen, setStickerOpen] = useState(false)
+  const [profileOpen, setProfileOpen] = useState(false)
   const [avatars, setAvatars] = useState<Record<string, string | null>>({})
   const isMobile = useIsMobile()
   const audioRef = useRef<AudioRecorderHandle | null>(null)
@@ -151,6 +153,7 @@ export default function HomePage() {
     setReplyTo(null)
     setGifOpen(false)
     setAttachOpen(false)
+    setProfileOpen(false)
     setSearchOpen(false)
     setSearchResults([])
     document.title = BASE_TITLE
@@ -984,7 +987,13 @@ export default function HomePage() {
     <div className="h-screen flex flex-col bg-gradient-to-br from-rose-50 via-orange-50 to-amber-50">
       <header className="shrink-0 border-b border-rose-100 bg-white/80 backdrop-blur z-10">
         <div className="max-w-2xl mx-auto flex items-center justify-between px-4 py-3 gap-2">
-          <div className="flex items-center gap-3 min-w-0">
+          <button
+            type="button"
+            onClick={() => partner && setProfileOpen(true)}
+            aria-label={`Ver perfil de ${partnerName}`}
+            title="Ver perfil"
+            className="flex items-center gap-3 min-w-0 text-left rounded-2xl hover:bg-rose-50/60 active:bg-rose-50 px-1 -ml-1 py-0.5 transition"
+          >
             <div className="relative shrink-0">
               <div
                 className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shadow overflow-hidden ${partnerStyle.avatar}`}
@@ -1024,7 +1033,7 @@ export default function HomePage() {
                 {SOCKET_ENABLED && !socketConnected && <span>· reconectando…</span>}
               </p>
             </div>
-          </div>
+          </button>
           <div className="flex items-center gap-1 shrink-0">
             <div className="relative">
               <Button
@@ -1475,6 +1484,19 @@ export default function HomePage() {
 
       {musicOpen && (
         <MusicDialog open onClose={() => setMusicOpen(false)} onShare={handleShareSong} />
+      )}
+
+      {profileOpen && partner && (
+        <PartnerProfile
+          open
+          partner={partner}
+          statusText={statusText}
+          online={otherOnline}
+          typing={otherTyping}
+          avatarImg={(partner.username && avatars[partner.username]) || null}
+          onClose={() => setProfileOpen(false)}
+          onOpenGallery={() => setGalleryOpen(true)}
+        />
       )}
     </div>
   )
