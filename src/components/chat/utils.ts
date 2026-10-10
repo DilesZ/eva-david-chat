@@ -153,22 +153,29 @@ export async function compressImage(file: File): Promise<string> {
   }
 }
 
-// Sticker SVG del pack propio → PNG 256px para enviarlo como mensaje
+// Sticker SVG del pack propio → PNG 256px para enviarlo como mensaje.
+// Usa <img> + canvas (más compatible en móviles que createImageBitmap con SVG).
 export async function svgStickerToPng(url: string): Promise<string> {
   const res = await fetch(url)
   if (!res.ok) throw new Error('No se pudo cargar el sticker')
   const blob = await res.blob()
-  const bitmap = await createImageBitmap(blob)
+  const objectUrl = URL.createObjectURL(blob)
   try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image()
+      el.onload = () => resolve(el)
+      el.onerror = () => reject(new Error('No se pudo leer el sticker'))
+      el.src = objectUrl
+    })
     const canvas = document.createElement('canvas')
     canvas.width = 256
     canvas.height = 256
     const ctx = canvas.getContext('2d')
     if (!ctx) throw new Error('Canvas no disponible')
-    ctx.drawImage(bitmap, 0, 0, 256, 256)
+    ctx.drawImage(img, 0, 0, 256, 256)
     return canvas.toDataURL('image/png')
   } finally {
-    bitmap.close()
+    URL.revokeObjectURL(objectUrl)
   }
 }
 export async function compressAvatar(file: File): Promise<string> {

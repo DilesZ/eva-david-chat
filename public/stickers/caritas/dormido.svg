@@ -1,0 +1,8 @@
+<svg width="256" height="256" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <circle cx="128" cy="140" r="92" fill="#fde047"/>
+  <path d="M80 132q16 12 32 0M144 132q16 12 32 0" stroke="#451a03" stroke-width="8" fill="none" stroke-linecap="round"/>
+  <ellipse cx="128" cy="162" rx="10" ry="14" fill="#451a03"/>
+  <text x="196" y="70" font-size="44" font-weight="bold" fill="#a78bfa" font-family="sans-serif">z</text>
+  <text x="214" y="44" font-size="32" font-weight="bold" fill="#a78bfa" font-family="sans-serif">z</text>
+  <text x="228" y="24" font-size="24" font-weight="bold" fill="#a78bfa" font-family="sans-serif">z</text>
+</svg>
