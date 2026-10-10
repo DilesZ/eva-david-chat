@@ -9,8 +9,9 @@ import { toPayload, withExtras, messageInclude, partnerPresence } from '@/lib/me
 const MAX_MESSAGES = 500
 const MAX_CONTENT_LENGTH = 2000
 const MAX_CAPTION_LENGTH = 500
-const MAX_IMAGE_BASE64 = 7_000_000 // ~5 MB en binario
-const ALLOWED_MIMES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+const MAX_FILE_BASE64 = 7_000_000 // ~5 MB en binario
+const ALLOWED_IMAGE_MIMES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+const ALLOWED_AUDIO_MIMES = ['audio/webm', 'audio/mpeg', 'audio/mp4', 'audio/ogg']
 
 export type BroadcastMessage = {
   id: number
@@ -138,38 +139,50 @@ export async function POST(req: Request) {
 
   const content = typeof body.content === 'string' ? body.content.trim() : ''
   const image = typeof body.image === 'string' ? body.image : ''
+  const audio = typeof body.audio === 'string' ? body.audio : ''
   const replyToId =
     typeof body.replyToId === 'number' && Number.isInteger(body.replyToId) && body.replyToId > 0
       ? body.replyToId
       : null
 
   // --- Validación según el tipo de mensaje ---
-  if (!image && !content) {
+  if (!image && !audio && !content) {
     return NextResponse.json({ error: 'El mensaje está vacío' }, { status: 400 })
   }
-  if (content.length > (image ? MAX_CAPTION_LENGTH : MAX_CONTENT_LENGTH)) {
+  if (image && audio) {
+    return NextResponse.json({ error: 'Envía foto o audio, no los dos' }, { status: 400 })
+  }
+  if (content.length > (image || audio ? MAX_CAPTION_LENGTH : MAX_CONTENT_LENGTH)) {
     return NextResponse.json({ error: 'El mensaje es demasiado largo' }, { status: 400 })
   }
 
-  let imageData: { mime: string; data: string; size: number } | null = null
-  if (image) {
-    const match = /^data:(image\/(?:jpeg|png|webp|gif));base64,([A-Za-z0-9+/]+={0,2})$/.exec(image)
+  let fileData: { mime: string; data: string; size: number } | null = null
+  const fileInput = image || audio
+  if (fileInput) {
+    const match =
+      /^data:((?:image\/(?:jpeg|png|webp|gif))|(?:audio\/(?:webm|mpeg|mp4|ogg)));base64,([A-Za-z0-9+/]+={0,2})$/.exec(
+        fileInput,
+      )
     if (!match) {
       return NextResponse.json(
-        { error: 'Formato de imagen no válido (usa JPG, PNG, WebP o GIF)' },
+        { error: 'Formato de archivo no válido (foto JPG/PNG/WebP/GIF o audio)' },
         { status: 400 },
       )
     }
     const mime = match[1]
     const data = match[2]
     const size = Math.floor((data.length * 3) / 4)
-    if (data.length > MAX_IMAGE_BASE64) {
-      return NextResponse.json({ error: 'La foto es demasiado grande (máximo 5 MB)' }, { status: 413 })
+    if (data.length > MAX_FILE_BASE64) {
+      return NextResponse.json(
+        { error: 'El archivo es demasiado grande (máximo 5 MB)' },
+        { status: 413 },
+      )
     }
-    if (!ALLOWED_MIMES.includes(mime)) {
-      return NextResponse.json({ error: 'Tipo de imagen no permitido' }, { status: 400 })
+    const allowed = audio ? ALLOWED_AUDIO_MIMES : ALLOWED_IMAGE_MIMES
+    if (!allowed.includes(mime)) {
+      return NextResponse.json({ error: 'Tipo de archivo no permitido' }, { status: 400 })
     }
-    imageData = { mime, data, size }
+    fileData = { mime, data, size }
   }
 
   if (replyToId) {
@@ -182,13 +195,14 @@ export async function POST(req: Request) {
     }
   }
 
+  const kind = audio ? 'audio' : image ? 'image' : 'text'
   const created = await db.message.create({
     data: {
       content,
-      type: image ? 'image' : 'text',
+      type: kind,
       userId: session.user.id,
       replyToId: replyToId ?? undefined,
-      ...(imageData ? { image: { create: imageData } } : {}),
+      ...(fileData ? { image: { create: fileData } } : {}),
     },
     include: messageInclude,
   })

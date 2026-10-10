@@ -46,6 +46,8 @@ export function MessageRow({
   const read = !!msg.readAt
   const edited = !!msg.editedAt
   const hasImage = msg.type === 'image' && !!msg.imageUrl
+  const hasAudio = msg.type === 'audio' && !!msg.audioUrl
+  const canEdit = msg.type === 'text' || msg.type === 'audio'
   const [editing, setEditing] = useState(false)
   const [editText, setEditText] = useState(msg.content)
   const [saving, setSaving] = useState(false)
@@ -103,7 +105,11 @@ export function MessageRow({
                 {msg.replyTo.name}
               </span>
               <span className="block text-[12px] leading-snug truncate opacity-90">
-                {msg.replyTo.type === 'image' ? '📷 Foto' : msg.replyTo.content}
+                {msg.replyTo.type === 'image'
+                  ? '📷 Foto'
+                  : msg.replyTo.type === 'audio'
+                    ? '🎙️ Audio'
+                    : msg.replyTo.content}
               </span>
             </button>
           )}
@@ -118,13 +124,21 @@ export function MessageRow({
               }`}
             />
           )}
+          {hasAudio && (
+            <audio
+              src={msg.audioUrl ?? ''}
+              controls
+              preload="metadata"
+              className="block w-[220px] sm:w-[260px] max-w-full my-1"
+            />
+          )}
           {editing ? (
             <div className="min-w-[200px] space-y-2 bg-white rounded-xl p-2">
               <Textarea
                 value={editText}
                 onChange={(e) => setEditText(e.target.value)}
                 rows={2}
-                maxLength={msg.type === 'image' ? 500 : 2000}
+                maxLength={msg.type === 'text' ? 2000 : 500}
                 autoFocus
                 className="text-sm text-stone-800 resize-none"
               />
@@ -253,7 +267,7 @@ export function MessageRow({
           )}
           {own && !editing && (onEdit || onDelete) && (
             <span className="flex items-center gap-0.5 ml-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-              {msg.type === 'text' && onEdit && (
+              {canEdit && onEdit && (
                 <button
                   type="button"
                   aria-label="Editar mensaje"

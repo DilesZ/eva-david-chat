@@ -15,12 +15,15 @@ type MessageWithUser = {
 }
 
 export function toPayload(m: MessageWithUser): MessagePayload {
+  const mediaUrl =
+    m.type === 'image' || m.type === 'audio' ? `/api/images/${m.id}` : null
   return {
     id: m.id,
     content: m.content,
     type: m.type,
     createdAt: m.createdAt.toISOString(),
-    imageUrl: m.type === 'image' ? `/api/images/${m.id}` : null,
+    imageUrl: m.type === 'image' ? mediaUrl : null,
+    audioUrl: m.type === 'audio' ? mediaUrl : null,
     readAt: m.readAt ? m.readAt.toISOString() : null,
     editedAt: m.editedAt ? m.editedAt.toISOString() : null,
     username: m.user.username,
@@ -139,5 +142,18 @@ export async function partnerPresence(partnerId: number) {
   }
 }
 
-// Emojis permitidos para reaccionar (conjunto corto y común, sin VS16)
-export const REACTION_EMOJIS = ['❤', '😂', '😮', '😢', '👍', '🙏'] as const
+// Emojis permitidos para reaccionar (conjunto común, sin VS16)
+export const REACTION_EMOJIS = [
+  '❤',
+  '😂',
+  '😮',
+  '😢',
+  '😍',
+  '😡',
+  '👍',
+  '👏',
+  '🙏',
+  '🎉',
+  '🔥',
+  '😴',
+] as const

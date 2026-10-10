@@ -36,7 +36,7 @@ export async function PATCH(
   if (!msg) {
     return NextResponse.json({ error: 'Mensaje no encontrado' }, { status: 404 })
   }
-  const limit = msg.type === 'image' ? MAX_CAPTION_LENGTH : MAX_CONTENT_LENGTH
+  const limit = msg.type === 'text' ? MAX_CONTENT_LENGTH : MAX_CAPTION_LENGTH
   if (!content || content.length > limit) {
     return NextResponse.json({ error: 'Contenido no válido' }, { status: 400 })
   }

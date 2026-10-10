@@ -18,6 +18,7 @@ import {
   Search,
   Images,
   X,
+  Film,
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import type { ChatMessage, Partner, SessionUser } from '@/components/chat/types'
@@ -37,6 +38,8 @@ import { Lightbox } from '@/components/chat/lightbox'
 import { EmojiPicker } from '@/components/chat/emoji-picker'
 import { PhotoDialog } from '@/components/chat/photo-dialog'
 import { GalleryDialog } from '@/components/chat/gallery-dialog'
+import { AudioRecorder } from '@/components/chat/audio-recorder'
+import { GifPicker } from '@/components/chat/gif-picker'
 import { SettingsDialog } from '@/components/chat/settings-dialog'
 import { ForgotPassword } from '@/components/chat/forgot-password'
 
@@ -99,6 +102,7 @@ export default function HomePage() {
   const [searching, setSearching] = useState(false)
   const [highlightId, setHighlightId] = useState<number | null>(null)
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null)
+  const [gifOpen, setGifOpen] = useState(false)
 
   const socketRef = useRef<Socket | null>(null)
   const bottomRef = useRef<HTMLDivElement | null>(null)
@@ -129,6 +133,7 @@ export default function HomePage() {
     setEmojiOpen(false)
     setPhotoDataUrl(null)
     setReplyTo(null)
+    setGifOpen(false)
     setSearchOpen(false)
     setSearchResults([])
     document.title = BASE_TITLE
@@ -608,6 +613,48 @@ export default function HomePage() {
     }
   }
 
+  // ---- audio ----
+
+  async function handleSendAudio(dataUrl: string) {
+    if (!me) return
+    setUploading(true)
+    emitTyping(false)
+    try {
+      const res = await fetch('/api/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: '',
+          audio: dataUrl,
+          ...(replyTo ? { replyToId: replyTo.id } : {}),
+        }),
+      })
+      if (res.status === 401) {
+        toast({ title: 'Tu sesión ha caducado', description: 'Vuelve a iniciar sesión.' })
+        clearSessionState()
+        return
+      }
+      const data = await res.json().catch(() => null)
+      if (!res.ok || !data?.message) {
+        toast({
+          title: 'No se pudo enviar el audio',
+          description: data?.error ?? 'Inténtalo de nuevo.',
+        })
+        return
+      }
+      if (isValidMessage(data.message)) {
+        setMessages((prev) =>
+          prev.some((m) => m.id === data.message.id) ? prev : [...prev, data.message],
+        )
+      }
+      setReplyTo(null)
+    } catch {
+      toast({ title: 'No se pudo enviar el audio', description: 'Comprueba tu conexión.' })
+    } finally {
+      setUploading(false)
+    }
+  }
+
   // ---- fotos ----
 
   async function handlePhotoFile(file: File | null | undefined) {
@@ -910,7 +957,11 @@ export default function HomePage() {
                             className="w-full text-left px-2 py-1.5 rounded-xl hover:bg-rose-50 transition"
                           >
                             <span className="block text-[13px] text-stone-700 truncate">
-                              {r.type === 'image' ? '📷 Foto' : r.content}
+                              {r.type === 'image'
+                                ? '📷 Foto'
+                                : r.type === 'audio'
+                                  ? '🎙️ Audio'
+                                  : r.content}
                             </span>
                             <span className="block text-[11px] text-stone-400">
                               {r.name} · {formatTime(new Date(r.createdAt))}
@@ -1090,6 +1141,33 @@ export default function HomePage() {
               <ImagePlus className="w-5 h-5" />
             )}
           </Button>
+
+          <div className="relative shrink-0">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() => setGifOpen((v) => !v)}
+              disabled={uploading}
+              aria-label="Enviar GIF"
+              title="Enviar GIF"
+              className={`w-11 h-11 rounded-full ${
+                gifOpen ? 'text-rose-500 bg-rose-50' : 'text-stone-400 hover:text-rose-500 hover:bg-rose-50'
+              }`}
+            >
+              <Film className="w-5 h-5" />
+            </Button>
+            <GifPicker
+              open={gifOpen}
+              onClose={() => setGifOpen(false)}
+              onPick={(dataUrl) => {
+                setGifOpen(false)
+                setPhotoDataUrl(dataUrl)
+              }}
+            />
+          </div>
+
+          <AudioRecorder onSend={handleSendAudio} sending={uploading} />
 
           <Button
             type="submit"

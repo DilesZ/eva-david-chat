@@ -17,6 +17,7 @@ export type ChatMessage = {
   type: string
   createdAt: string
   imageUrl: string | null
+  audioUrl: string | null
   readAt: string | null
   editedAt: string | null
   username: string
