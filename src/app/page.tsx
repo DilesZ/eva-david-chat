@@ -15,6 +15,9 @@ import {
   Smile,
   ImagePlus,
   ArrowDown,
+  Search,
+  Images,
+  X,
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import type { ChatMessage, Partner, SessionUser } from '@/components/chat/types'
@@ -33,8 +36,14 @@ import { TypingBubble } from '@/components/chat/typing-bubble'
 import { Lightbox } from '@/components/chat/lightbox'
 import { EmojiPicker } from '@/components/chat/emoji-picker'
 import { PhotoDialog } from '@/components/chat/photo-dialog'
+import { GalleryDialog } from '@/components/chat/gallery-dialog'
 import { SettingsDialog } from '@/components/chat/settings-dialog'
 import { ForgotPassword } from '@/components/chat/forgot-password'
+
+// Websockets solo en local/VPS (NEXT_PUBLIC_ENABLE_SOCKET=true).
+// En Vercel el tiempo real va por polling (ver efecto "polling" más abajo).
+const SOCKET_ENABLED = process.env.NEXT_PUBLIC_ENABLE_SOCKET === 'true'
+const POLL_INTERVAL_MS = 3000
 
 function DaySeparator({ label }: { label: string }) {
   return (
@@ -83,6 +92,12 @@ export default function HomePage() {
   const [photoDataUrl, setPhotoDataUrl] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const [processingPhoto, setProcessingPhoto] = useState(false)
+  const [galleryOpen, setGalleryOpen] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState<ChatMessage[]>([])
+  const [searching, setSearching] = useState(false)
+  const [highlightId, setHighlightId] = useState<number | null>(null)
 
   const socketRef = useRef<Socket | null>(null)
   const bottomRef = useRef<HTMLDivElement | null>(null)
@@ -94,6 +109,8 @@ export default function HomePage() {
   const typingRef = useRef(false)
   const typingStopTimerRef = useRef<number | null>(null)
   const otherTypingTimerRef = useRef<number | null>(null)
+  const lastPollRef = useRef<string | null>(null)
+  const highlightTimerRef = useRef<number | null>(null)
 
   const clearSessionState = useCallback(() => {
     socketRef.current?.disconnect()
@@ -158,6 +175,11 @@ export default function HomePage() {
           if (!cancelled) {
             const valid: ChatMessage[] = (data.messages ?? []).filter(isValidMessage)
             setMessages(valid)
+            lastPollRef.current = new Date().toISOString()
+            if (data.partner) {
+              setOtherOnline(!!data.partner.online)
+              setOtherTyping(!!data.partner.typing)
+            }
           }
         }
       } catch {
@@ -173,9 +195,9 @@ export default function HomePage() {
     }
   }, [me?.id, clearSessionState, toast])
 
-  // ---- conexión websocket en tiempo real ----
+  // ---- conexión websocket en tiempo real (solo local/VPS) ----
   useEffect(() => {
-    if (!me || !token) return
+    if (!SOCKET_ENABLED || !me || !token) return
 
     // Never use the port in the URL, always use XTransformPort
     // Do not change the path, it is used by Caddy to forward to the correct port
@@ -243,6 +265,70 @@ export default function HomePage() {
       if (socketRef.current === socketInstance) socketRef.current = null
     }
   }, [me, token, partner, clearSessionState, toast])
+
+  // ---- polling en tiempo real (Vercel): mensajes, ediciones, borrados, leídos y presencia ----
+  useEffect(() => {
+    if (!me || !partner) return
+    const t = window.setInterval(async () => {
+      try {
+        const since = lastPollRef.current
+        const url = since ? `/api/messages?since=${encodeURIComponent(since)}` : '/api/messages'
+        const res = await fetch(url)
+        if (res.status === 401) {
+          toast({ title: 'Tu sesión ha caducado', description: 'Vuelve a iniciar sesión.' })
+          clearSessionState()
+          return
+        }
+        if (!res.ok) return
+        const data = await res.json()
+        lastPollRef.current = new Date().toISOString()
+        if (data.partner) {
+          setOtherOnline(!!data.partner.online)
+          setOtherTyping(!!data.partner.typing)
+        }
+        const fresh: ChatMessage[] = (data.messages ?? []).filter(isValidMessage)
+        const edited: ChatMessage[] = (data.edited ?? []).filter(isValidMessage)
+        const deletedIds: number[] = Array.isArray(data.deletedIds) ? data.deletedIds : []
+        const readIds: number[] = Array.isArray(data.readIds) ? data.readIds : []
+        if (fresh.length === 0 && edited.length === 0 && deletedIds.length === 0 && readIds.length === 0) {
+          return
+        }
+        let ping = false
+        setMessages((prev) => {
+          const ids = new Set(prev.map((m) => m.id))
+          let next = prev
+          if (deletedIds.length > 0) {
+            const gone = new Set(deletedIds)
+            next = next.filter((m) => !gone.has(m.id))
+          }
+          if (edited.length > 0) {
+            const byId = new Map(edited.map((m) => [m.id, m]))
+            next = next.map((m) => byId.get(m.id) ?? m)
+          }
+          if (readIds.length > 0) {
+            const now = new Date().toISOString()
+            const seen = new Set(readIds)
+            next = next.map((m) =>
+              m.username === me.username && seen.has(m.id) && !m.readAt ? { ...m, readAt: now } : m,
+            )
+          }
+          const additions = fresh.filter((m) => !ids.has(m.id))
+          if (additions.length > 0) {
+            next = [...next, ...additions].sort((a, b) => a.id - b.id)
+            if (additions.some((m) => m.username === partner.username)) ping = true
+          }
+          return next
+        })
+        if (ping && document.hidden) {
+          setHasUnread(true)
+          playPing()
+        }
+      } catch {
+        // un poll fallido se reintenta en el siguiente intervalo
+      }
+    }, POLL_INTERVAL_MS)
+    return () => window.clearInterval(t)
+  }, [me, partner, clearSessionState, toast])
 
   // ---- visibilidad de la pestaña (aviso de mensaje + marcar leído) ----
   useEffect(() => {
@@ -335,11 +421,16 @@ export default function HomePage() {
     clearSessionState()
   }
 
-  // emite (una sola vez) el estado "escribiendo"
+  // emite (una sola vez) el estado "escribiendo": por API (polling) y por socket si existe
   function emitTyping(v: boolean) {
     if (typingRef.current === v) return
     typingRef.current = v
     socketRef.current?.emit('typing', { typing: v })
+    fetch('/api/typing', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ typing: v }),
+    }).catch(() => {})
   }
 
   function handleDraftChange(value: string) {
@@ -395,6 +486,86 @@ export default function HomePage() {
     } finally {
       setSending(false)
     }
+  }
+
+  // ---- editar / borrar ----
+
+  async function handleEditMessage(id: number, content: string): Promise<boolean> {
+    try {
+      const res = await fetch(`/api/messages/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content }),
+      })
+      const data = await res.json().catch(() => null)
+      if (!res.ok || !data?.message || !isValidMessage(data.message)) {
+        toast({
+          title: 'No se pudo editar',
+          description: data?.error ?? 'Inténtalo de nuevo.',
+        })
+        return false
+      }
+      const updated = data.message as ChatMessage
+      setMessages((prev) => prev.map((m) => (m.id === id ? updated : m)))
+      return true
+    } catch {
+      toast({ title: 'No se pudo editar', description: 'Comprueba tu conexión.' })
+      return false
+    }
+  }
+
+  async function handleDeleteMessage(id: number) {
+    const backup = messages
+    setMessages((prev) => prev.filter((m) => m.id !== id))
+    try {
+      const res = await fetch(`/api/messages/${id}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const data = await res.json().catch(() => null)
+        setMessages(backup)
+        toast({
+          title: 'No se pudo borrar',
+          description: data?.error ?? 'Inténtalo de nuevo.',
+        })
+      }
+    } catch {
+      setMessages(backup)
+      toast({ title: 'No se pudo borrar', description: 'Comprueba tu conexión.' })
+    }
+  }
+
+  // ---- buscador ----
+
+  async function handleSearch(query: string) {
+    setSearchQuery(query)
+    if (query.trim().length < 2) {
+      setSearchResults([])
+      return
+    }
+    setSearching(true)
+    try {
+      const res = await fetch(`/api/messages/search?q=${encodeURIComponent(query.trim())}`)
+      if (res.ok) {
+        const data = await res.json()
+        setSearchResults((data.messages ?? []).filter(isValidMessage))
+      }
+    } catch {
+      // se mantiene la lista anterior
+    } finally {
+      setSearching(false)
+    }
+  }
+
+  function jumpToMessage(id: number) {
+    const el = document.querySelector(`[data-message-id="${id}"]`)
+    if (!el) {
+      toast({ title: 'Mensaje muy antiguo', description: 'No está en la vista actual.' })
+      return
+    }
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    if (highlightTimerRef.current) window.clearTimeout(highlightTimerRef.current)
+    setHighlightId(id)
+    highlightTimerRef.current = window.setTimeout(() => setHighlightId(null), 2500)
+    setSearchOpen(false)
   }
 
   // ---- fotos ----
@@ -587,6 +758,9 @@ export default function HomePage() {
         msg={msg}
         own={msg.username === me.username}
         onImageClick={setLightboxUrl}
+        onEdit={msg.username === me.username ? handleEditMessage : undefined}
+        onDelete={msg.username === me.username ? handleDeleteMessage : undefined}
+        highlighted={highlightId === msg.id}
       />,
     )
   }
@@ -624,11 +798,90 @@ export default function HomePage() {
                   aria-hidden="true"
                 />
                 {statusText}
-                {!socketConnected && <span>· reconectando…</span>}
+                {SOCKET_ENABLED && !socketConnected && <span>· reconectando…</span>}
               </p>
             </div>
           </div>
           <div className="flex items-center gap-1 shrink-0">
+            <div className="relative">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => {
+                  setSearchOpen((v) => !v)
+                  setSearchQuery('')
+                  setSearchResults([])
+                }}
+                aria-label="Buscar mensajes"
+                title="Buscar mensajes"
+                className={`rounded-full ${
+                  searchOpen
+                    ? 'text-rose-500 bg-rose-50'
+                    : 'text-stone-400 hover:text-rose-500 hover:bg-rose-50'
+                }`}
+              >
+                <Search className="w-5 h-5" />
+              </Button>
+              {searchOpen && (
+                <div className="absolute right-0 top-12 w-72 max-w-[80vw] bg-white border border-rose-100 rounded-2xl shadow-xl p-2 z-30">
+                  <div className="flex items-center gap-2 px-1">
+                    <Input
+                      autoFocus
+                      placeholder="Buscar…"
+                      value={searchQuery}
+                      onChange={(e) => handleSearch(e.target.value)}
+                      className="h-9 border-rose-200 focus-visible:ring-rose-300"
+                    />
+                    <button
+                      type="button"
+                      aria-label="Cerrar búsqueda"
+                      onClick={() => setSearchOpen(false)}
+                      className="p-1.5 rounded-full text-stone-400 hover:bg-rose-50 hover:text-rose-500 shrink-0"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                  {searching && (
+                    <p className="text-xs text-stone-400 px-2 py-2 flex items-center gap-1.5">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" /> Buscando…
+                    </p>
+                  )}
+                  {!searching && searchQuery.trim().length >= 2 && searchResults.length === 0 && (
+                    <p className="text-xs text-stone-400 px-2 py-2">Sin resultados.</p>
+                  )}
+                  {searchResults.length > 0 && (
+                    <ul className="max-h-64 overflow-y-auto mt-1 space-y-0.5">
+                      {searchResults.map((r) => (
+                        <li key={r.id}>
+                          <button
+                            type="button"
+                            onClick={() => jumpToMessage(r.id)}
+                            className="w-full text-left px-2 py-1.5 rounded-xl hover:bg-rose-50 transition"
+                          >
+                            <span className="block text-[13px] text-stone-700 truncate">
+                              {r.type === 'image' ? '📷 Foto' : r.content}
+                            </span>
+                            <span className="block text-[11px] text-stone-400">
+                              {r.name} · {formatTime(new Date(r.createdAt))}
+                            </span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setGalleryOpen(true)}
+              aria-label="Ver fotos"
+              title="Ver fotos"
+              className="text-stone-400 hover:text-rose-500 hover:bg-rose-50 rounded-full"
+            >
+              <Images className="w-5 h-5" />
+            </Button>
             <Button
               variant="ghost"
               size="icon"
@@ -794,6 +1047,17 @@ export default function HomePage() {
           me={me}
           onEmailSaved={(email) => setMe({ ...me, email })}
           onClose={() => setSettingsOpen(false)}
+        />
+      )}
+
+      {galleryOpen && (
+        <GalleryDialog
+          open
+          onClose={() => setGalleryOpen(false)}
+          onPick={(url) => {
+            setGalleryOpen(false)
+            setLightboxUrl(url)
+          }}
         />
       )}
     </div>

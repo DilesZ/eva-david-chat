@@ -15,6 +15,8 @@ model User {
   password    String
   name        String
   email       String?
+  lastSeenAt  DateTime? // último poll: presencia "En línea"
+  typingAt    DateTime? // último aviso de "escribiendo"
   messages    Message[]
   sessions    Session[]
   resetTokens PasswordResetToken[]
@@ -26,6 +28,8 @@ model Message {
   content   String        @default("")
   type      String        @default("text") // "text" | "image"
   readAt    DateTime?
+  editedAt  DateTime? // última edición (se muestra "editado")
+  deletedAt DateTime? // borrado suave: se oculta pero se sincroniza el id
   userId    Int
   user      User          @relation(fields: [userId], references: [id])
   createdAt DateTime      @default(now())

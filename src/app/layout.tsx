@@ -14,18 +14,39 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Eva ♥ David — Nuestro chat",
-  description: "Chat privado para Eva y David, con historial de mensajes.",
+  title: 'Eva ♥ David — Nuestro chat',
+  description: 'Chat privado para Eva y David, con historial de mensajes.',
+  manifest: '/manifest.webmanifest',
   icons: {
-    icon: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%92%AC%3C/text%3E%3C/svg%3E",
+    icon: [
+      { url: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' },
+    ],
+    apple: [{ url: '/icons/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'Eva ♥ David',
   },
 };
 
 export const viewport: Viewport = {
-  width: "device-width",
+  width: 'device-width',
   initialScale: 1,
-  viewportFit: "cover",
+  viewportFit: 'cover',
+  themeColor: '#f43f5e',
 };
+
+function SwRegister() {
+  return (
+    <script
+      dangerouslySetInnerHTML={{
+        __html: `if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('/sw.js').catch(function(){})})}`,
+      }}
+    />
+  );
+}
 
 export default function RootLayout({
   children,
@@ -39,6 +60,7 @@ export default function RootLayout({
       >
         {children}
         <Toaster />
+        <SwRegister />
       </body>
     </html>
   );

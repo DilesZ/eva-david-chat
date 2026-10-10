@@ -18,6 +18,7 @@ export type ChatMessage = {
   createdAt: string
   imageUrl: string | null
   readAt: string | null
+  editedAt: string | null
   username: string
   name: string
 }

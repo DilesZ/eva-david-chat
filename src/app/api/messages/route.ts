@@ -1,9 +1,10 @@
-// GET  /api/messages — historial (últimos 500 mensajes en orden ascendente)
+// GET  /api/messages — historial (últimos 500) o incremental con ?since=ISO
 // POST /api/messages — guarda un mensaje nuevo (texto o foto) y lo difunde por websocket
 import { NextResponse } from 'next/server'
 import { db, ensureDb } from '@/lib/db'
 import { getSession } from '@/lib/auth'
 import { broadcastEvent } from '@/lib/broadcast'
+import { toPayload, messageInclude, partnerPresence } from '@/lib/messages'
 
 const MAX_MESSAGES = 500
 const MAX_CONTENT_LENGTH = 2000
@@ -18,46 +19,84 @@ export type BroadcastMessage = {
   createdAt: string
   imageUrl: string | null
   readAt: string | null
+  editedAt: string | null
   username: string
   name: string
 }
 
-function toPayload(m: {
-  id: number
-  content: string
-  type: string
-  createdAt: Date
-  readAt: Date | null
-  user: { username: string; name: string }
-}): BroadcastMessage {
-  return {
-    id: m.id,
-    content: m.content,
-    type: m.type,
-    createdAt: m.createdAt.toISOString(),
-    imageUrl: m.type === 'image' ? `/api/images/${m.id}` : null,
-    readAt: m.readAt ? m.readAt.toISOString() : null,
-    username: m.user.username,
-    name: m.user.name,
-  }
-}
-
-const messageInclude = { user: { select: { username: true, name: true } } } as const
-
-export async function GET() {
+export async function GET(req: Request) {
   await ensureDb()
   const session = await getSession()
   if (!session) {
     return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
   }
 
-  const messages = await db.message.findMany({
-    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-    take: MAX_MESSAGES,
-    include: messageInclude,
-  })
+  // Latido de presencia en cada poll
+  await db.user.update({
+    where: { id: session.user.id },
+    data: { lastSeenAt: new Date() },
+  }).catch(() => {})
 
-  return NextResponse.json({ messages: messages.reverse().map(toPayload) })
+  const partner = await db.user.findFirst({
+    where: { id: { not: session.user.id } },
+    select: { id: true },
+  })
+  const presence = partner ? await partnerPresence(partner.id) : { online: false, typing: false }
+
+  const sinceParam = new URL(req.url).searchParams.get('since')
+  const since = sinceParam ? new Date(sinceParam) : null
+  const validSince = since && !Number.isNaN(since.getTime()) ? since : null
+
+  // Carga inicial: últimos 500 no borrados
+  if (!validSince) {
+    const messages = await db.message.findMany({
+      where: { deletedAt: null },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: MAX_MESSAGES,
+      include: messageInclude,
+    })
+    return NextResponse.json({
+      messages: messages.reverse().map(toPayload),
+      edited: [],
+      deletedIds: [],
+      readIds: [],
+      partner: presence,
+    })
+  }
+
+  // Poll incremental: nuevos + editados + borrados + leídos desde `since`
+  const [fresh, edited, deleted, read] = await Promise.all([
+    db.message.findMany({
+      where: { deletedAt: null, createdAt: { gt: validSince } },
+      orderBy: [{ id: 'asc' }],
+      take: MAX_MESSAGES,
+      include: messageInclude,
+    }),
+    db.message.findMany({
+      where: { deletedAt: null, editedAt: { gt: validSince } },
+      orderBy: [{ id: 'asc' }],
+      take: MAX_MESSAGES,
+      include: messageInclude,
+    }),
+    db.message.findMany({
+      where: { deletedAt: { gt: validSince } },
+      select: { id: true },
+      take: MAX_MESSAGES,
+    }),
+    db.message.findMany({
+      where: { userId: session.user.id, readAt: { gt: validSince } },
+      select: { id: true },
+      take: MAX_MESSAGES,
+    }),
+  ])
+
+  return NextResponse.json({
+    messages: fresh.map(toPayload),
+    edited: edited.map(toPayload),
+    deletedIds: deleted.map((m) => m.id),
+    readIds: read.map((m) => m.id),
+    partner: presence,
+  })
 }
 
 export async function POST(req: Request) {
